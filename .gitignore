@@ -6,6 +6,11 @@
 Thumbs.db
 dist/
 build/
+artifacts/
+cache/
+ignition/deployments/
+typechain-types/
+types/
 coverage/
 .vercel/
 .next/

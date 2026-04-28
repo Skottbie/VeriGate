@@ -1,0 +1,12 @@
+{
+  "network": "0G Galileo",
+  "chainId": 16602,
+  "deployer": "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
+  "contracts": {
+    "EventRegistry": "0x1773fC52D7C64e3AF5C7dad31a28dF999d646f69",
+    "NullifierRegistry": "0x9D1D4d7c17E87679a27778B2Ba9c3034B94b0788",
+    "VerifierReceiptRegistry": "0xBC5d68c48014d9C8809a9dF34B03839c8a2A6De7",
+    "EventPassSBT": "0xC6E45721b7CD58e1FE301870DeE9614DFC1Dc120"
+  },
+  "createdAt": "2026-04-28T09:38:20.163Z"
+}

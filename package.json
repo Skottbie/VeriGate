@@ -4,9 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/verifier.test.js"
+    "test": "node test/verifier.test.js && hardhat test test/contracts.test.js",
+    "test:verifier": "node test/verifier.test.js",
+    "test:contracts": "hardhat test test/contracts.test.js",
+    "compile": "hardhat compile",
+    "deploy:0g": "hardhat run --network ogGalileo scripts/deploy-0g.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.4",
+    "@openzeppelin/contracts": "^5.6.1",
+    "chai": "^6.2.2",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.14.0",
+    "hardhat": "^3.4.2",
+    "mocha": "^11.0.0"
   }
 }

@@ -1,0 +1,39 @@
+import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import dotenv from "dotenv";
+import { defineConfig } from "hardhat/config";
+
+dotenv.config();
+
+const ogAccounts = process.env.OG_PRIVATE_KEY ? [process.env.OG_PRIVATE_KEY] : [];
+
+export default defineConfig({
+  plugins: [hardhatToolboxMochaEthersPlugin],
+  solidity: {
+    profiles: {
+      default: {
+        version: "0.8.28",
+      },
+      production: {
+        version: "0.8.28",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    },
+  },
+  networks: {
+    hardhatMainnet: {
+      type: "edr-simulated",
+      chainType: "l1",
+    },
+    ogGalileo: {
+      type: "http",
+      chainType: "l1",
+      url: process.env.OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
+      accounts: ogAccounts,
+    },
+  },
+});
