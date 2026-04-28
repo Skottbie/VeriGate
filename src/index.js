@@ -22,3 +22,7 @@ export {
 export {
   verifyProof
 } from "./verifier.js";
+
+// I/O adapters such as ogStorage.js intentionally stay out of the pure core
+// barrel. Import them directly from their module so verifier consumers do not
+// pull network-facing dependencies by default.

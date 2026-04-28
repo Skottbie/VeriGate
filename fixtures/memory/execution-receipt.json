@@ -1,0 +1,14 @@
+{
+  "action": "mint_rsvp_pass",
+  "chainId": 16602,
+  "contract": "EventPassSBT",
+  "createdAt": "2026-04-28T11:20:33.052Z",
+  "eventId": "open-agents-demo-gate",
+  "executor": "KeeperHub",
+  "executionId": "execution-open-agents-pass-v1",
+  "passContract": "0xC6E45721b7CD58e1FE301870DeE9614DFC1Dc120",
+  "recipientMode": "fresh-pass-wallet",
+  "schemaVersion": 1,
+  "status": "READY_FOR_MINT",
+  "txHash": "pending"
+}

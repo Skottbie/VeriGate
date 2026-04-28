@@ -1,0 +1,12 @@
+{
+  "createdAt": "2026-04-28T11:20:33.052Z",
+  "eventId": "open-agents-demo-gate",
+  "model": "0g-compute-policy-compiler-placeholder",
+  "outputHash": "0x7e8697998a76b9c043e5e73d0b6236dd451c5a9a04d8ad8be90f1cf70d3991d8",
+  "policyDraftHash": "0x66cb0e97c399c4df728bc94b90856e3c1f475d89410a5db599927fbd364021bcf",
+  "promptHash": "0x2aaf33b1d8af2c271173c11de0644f82faf13d017ef329d4bb989696a6b90c1e",
+  "provider": "0G",
+  "receiptId": "compute-open-agents-policy-v1",
+  "schemaVersion": 1,
+  "storagePointer": "0G://pending"
+}

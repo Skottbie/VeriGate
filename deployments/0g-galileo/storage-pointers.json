@@ -1,0 +1,79 @@
+{
+  "network": "0G Galileo",
+  "eventId": "open-agents-demo-gate",
+  "namespace": "verigate/events/open-agents-demo-gate",
+  "indexerRpc": "https://indexer-storage-testnet-turbo.0g.ai",
+  "pointers": {
+    "policy": {
+      "provider": "0G",
+      "network": "0G Galileo",
+      "indexerRpc": "https://indexer-storage-testnet-turbo.0g.ai",
+      "eventId": "open-agents-demo-gate",
+      "namespace": "verigate/events/open-agents-demo-gate",
+      "kind": "policy",
+      "rootHash": "0x0e1517d414baf334f0e7b34c369f989ae2b414f5b4900f1144a920e1fe12980f",
+      "localRootHash": "0x0e1517d414baf334f0e7b34c369f989ae2b414f5b4900f1144a920e1fe12980f",
+      "txHash": "0xdc170a94e003d82b84775929139aaf418fe46bd44a4beb45eb71d8546c889ba2",
+      "txSeq": 53769,
+      "contentHash": "0x30f0e16423b37b3afba85981702e299fd0b2066fe206653c1fd65650c7910756",
+      "byteLength": 841
+    },
+    "compute-receipts": {
+      "provider": "0G",
+      "network": "0G Galileo",
+      "indexerRpc": "https://indexer-storage-testnet-turbo.0g.ai",
+      "eventId": "open-agents-demo-gate",
+      "namespace": "verigate/events/open-agents-demo-gate",
+      "kind": "compute-receipts",
+      "rootHash": "0x8a6856ef5958fbc1f0d551c295297759d37886b1c1487921b1e18ad20673014b",
+      "localRootHash": "0x8a6856ef5958fbc1f0d551c295297759d37886b1c1487921b1e18ad20673014b",
+      "txHash": "0x5d00f8ce743251ac2675740a4fa4ec6281f2b5a8d035c9db9ad4111b4f793224",
+      "txSeq": 53771,
+      "contentHash": "0xf5af64740f463267a836322595d9e1b7a212711b107701cdfe2d405bd6dec52a",
+      "byteLength": 665
+    },
+    "audit": {
+      "provider": "0G",
+      "network": "0G Galileo",
+      "indexerRpc": "https://indexer-storage-testnet-turbo.0g.ai",
+      "eventId": "open-agents-demo-gate",
+      "namespace": "verigate/events/open-agents-demo-gate",
+      "kind": "audit",
+      "rootHash": "0xe93efeb2ce6881df1617b25c913e676dd5c8b208a5d2891d90b7ef38e223425d",
+      "localRootHash": "0xe93efeb2ce6881df1617b25c913e676dd5c8b208a5d2891d90b7ef38e223425d",
+      "txHash": "0xe7eab359c2745bd816eaacb3fc7fc846bf5ec300adda62881c483414db27eef7",
+      "txSeq": 53772,
+      "contentHash": "0x20c03153b35c39ce282ccffa7de5a197e917db62fe827516948f55f234647c74",
+      "byteLength": 809
+    },
+    "execution": {
+      "provider": "0G",
+      "network": "0G Galileo",
+      "indexerRpc": "https://indexer-storage-testnet-turbo.0g.ai",
+      "eventId": "open-agents-demo-gate",
+      "namespace": "verigate/events/open-agents-demo-gate",
+      "kind": "execution",
+      "rootHash": "0x2eae8c0525e6942c955b1f4c25b04070642fe9e6ea73a734b495e2625d3ef87a",
+      "localRootHash": "0x2eae8c0525e6942c955b1f4c25b04070642fe9e6ea73a734b495e2625d3ef87a",
+      "txHash": "0xee679e54bdf8d648b88606a56f0ec86a83430a78b64168ff59ad96ec3eddd132",
+      "txSeq": 53773,
+      "contentHash": "0x9b14a946afda16526c941da1d604a16fd10261bff4e1459129f1e007551ffbeb",
+      "byteLength": 543
+    },
+    "manifest": {
+      "provider": "0G",
+      "network": "0G Galileo",
+      "indexerRpc": "https://indexer-storage-testnet-turbo.0g.ai",
+      "eventId": "open-agents-demo-gate",
+      "namespace": "verigate/events/open-agents-demo-gate",
+      "kind": "manifest",
+      "rootHash": "0xa17c32d28dc574c41a8c6f68a1179c9769d56af299c9945f09b5f695dda657c4",
+      "localRootHash": "0xa17c32d28dc574c41a8c6f68a1179c9769d56af299c9945f09b5f695dda657c4",
+      "txHash": "0xe70f270918b4b30388a051332803c1d4164193e160b0197433858f5b44fb3c63",
+      "txSeq": 53775,
+      "contentHash": "0xba96bfbb9f0ecf76e63028fa40e552debbf4d59fc6457a6807b88b757f26f116",
+      "byteLength": 2586
+    }
+  },
+  "createdAt": "2026-04-28T11:34:00.093Z"
+}

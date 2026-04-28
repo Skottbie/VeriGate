@@ -1,0 +1,19 @@
+{
+  "auditId": "audit-open-agents-demo-gate-v1",
+  "applicantCommitment": "0x9e1f5b84e3a9a6a2f0a7a92ef13f06f59e03512d9d26d35f2b9f0af6b6e4e0a1",
+  "createdAt": "2026-04-28T11:20:33.052Z",
+  "eventId": "open-agents-demo-gate",
+  "eventNullifier": "0x5d334a792d69a7f6952c235b98917d126df9ffb48dd5c3f06a17f6b7040c2af9",
+  "policyHash": "0x66cb0e97c399c4df728bc94b90856e3c1f475d89410a5db599927fbd364021bcf",
+  "proofHash": "0xb6f2c509f8aa34fa182ee087f8a44c16c88ad470a6f1d74db348672807f3aef4",
+  "schemaVersion": 1,
+  "storage": {
+    "provider": "0G",
+    "pointer": "0G://pending"
+  },
+  "verifier": {
+    "result": "approved",
+    "reasonCode": "POLICY_SATISFIED",
+    "verifierVersion": "p1-deterministic-verifier"
+  }
+}

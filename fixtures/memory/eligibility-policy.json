@@ -1,0 +1,29 @@
+{
+  "eventId": "open-agents-demo-gate",
+  "eventName": "Open Agents ETH Holder Gate",
+  "organizer": "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
+  "policyId": "policy-open-agents-eth-holder-v1",
+  "requiredClaims": [
+    "ETH_HOLDER"
+  ],
+  "privacy": {
+    "revealWalletAddress": false,
+    "revealExactBalance": false,
+    "revealWalletBreakdown": false,
+    "disclosureMode": "tier_only"
+  },
+  "antiSybil": {
+    "enabled": true,
+    "nullifierScope": "event"
+  },
+  "execution": {
+    "onPass": "mint_rsvp_pass",
+    "executor": "keeperhub"
+  },
+  "metadata": {
+    "policyHash": "0x66cb0e97c399c4df728bc94b90856e3c1f475d89410a5db599927fbd364021bcf",
+    "verifierVersion": "p1-deterministic-verifier",
+    "agentVersion": "p3-storage-memory",
+    "createdAt": "2026-04-28T11:20:33.052Z"
+  }
+}

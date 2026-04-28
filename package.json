@@ -7,14 +7,28 @@
     "test": "node test/verifier.test.js && hardhat test test/contracts.test.js",
     "test:verifier": "node test/verifier.test.js",
     "test:contracts": "hardhat test test/contracts.test.js",
+    "test:0g:storage": "node scripts/test-0g-storage.js",
     "compile": "hardhat compile",
     "deploy:0g": "hardhat run --network ogGalileo scripts/deploy-0g.js"
   },
   "engines": {
     "node": ">=20"
   },
+  "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "^1.2.6"
+  },
   "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^4.0.9",
+    "@nomicfoundation/hardhat-ethers-chai-matchers": "^3.0.6",
+    "@nomicfoundation/hardhat-ignition": "^3.1.3",
+    "@nomicfoundation/hardhat-ignition-ethers": "^3.1.4",
+    "@nomicfoundation/hardhat-keystore": "^3.0.7",
+    "@nomicfoundation/hardhat-mocha": "^3.0.17",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.6",
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.4",
+    "@nomicfoundation/hardhat-typechain": "^3.0.7",
+    "@nomicfoundation/hardhat-verify": "^3.0.15",
+    "@nomicfoundation/ignition-core": "^3.1.3",
     "@openzeppelin/contracts": "^5.6.1",
     "chai": "^6.2.2",
     "dotenv": "^17.4.2",
