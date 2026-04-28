@@ -78,9 +78,9 @@ export function finalizePolicyDraft(policyDraft, { now = new Date(), agentVersio
   finalized.antiSybil ??= { enabled: true, nullifierScope: "event" };
   finalized.execution ??= { onPass: "mint_rsvp_pass", executor: "keeperhub" };
   finalized.metadata ??= {};
-  finalized.metadata.verifierVersion ??= "p1-deterministic-verifier";
-  finalized.metadata.agentVersion ??= agentVersion;
-  finalized.metadata.createdAt ??= now.toISOString();
+  finalized.metadata.verifierVersion = "p1-deterministic-verifier";
+  finalized.metadata.agentVersion = agentVersion;
+  finalized.metadata.createdAt = now.toISOString();
   finalized.metadata.policyHash = hashPolicy(finalized);
 
   return validateEligibilityPolicy(finalized);

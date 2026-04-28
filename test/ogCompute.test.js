@@ -55,7 +55,23 @@ test("extractJsonObject parses raw and fenced JSON", () => {
 test("finalizePolicyDraft creates schema-valid policy with policy hash", () => {
   const policy = finalizePolicyDraft(samplePolicy(), { now: fixedNow() });
   validateEligibilityPolicy(policy);
+  assert.equal(policy.metadata.createdAt, "2026-04-28T12:00:00.000Z");
+  assert.equal(policy.metadata.agentVersion, "p4-0g-compute");
   assert.match(policy.metadata.policyHash, /^0x[0-9a-f]{64}$/);
+});
+
+test("finalizePolicyDraft overrides model-supplied metadata timestamps", () => {
+  const draft = samplePolicy();
+  draft.metadata.createdAt = "2023-10-05T14:48:00Z";
+  draft.metadata.agentVersion = "model-supplied-agent";
+
+  const policy = finalizePolicyDraft(draft, {
+    now: fixedNow(),
+    agentVersion: "p5-openclaw-agent",
+  });
+
+  assert.equal(policy.metadata.createdAt, "2026-04-28T12:00:00.000Z");
+  assert.equal(policy.metadata.agentVersion, "p5-openclaw-agent");
 });
 
 test("createComputeReceipt binds prompt, output, policy, provider, and model", () => {
