@@ -62,3 +62,6 @@ zkTLS, TEE attestations, verifiable agent receipts, MCP-style agent tools, agent
 
 Agent task orchestration, zkTLS-style evidence, TEE attestation concepts, onchain proof receipts, MCP-style tool interfaces, x402-style agent payments, and reputation graphs for verifiable agent work.
 
+## Update - 2026-04-28 16:22:21 +08:00
+
+The MVP shape has been finalized locally, and the project is entering formal implementation.

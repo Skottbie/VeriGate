@@ -15,3 +15,4 @@ coverage/
 data/private/
 secrets/
 .github
+docs/mvp-design.md
