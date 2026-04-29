@@ -16,8 +16,12 @@ import {
 import {
   assertPublicProofSafe,
   buildWalletControlMessage,
+  buildEnsIdentityPayload,
+  createEnsResolverAdapter,
   hashPolicy,
+  publishEnsTextRecords,
   requestReclaimEthHolderProof,
+  validateEnsRecordAlignment,
 } from "../src/index.js";
 
 dotenv.config({ quiet: true });
@@ -26,6 +30,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PUBLIC_ROOT = join(ROOT, "public");
 const PORT = Number(process.env.VERIGATE_WEB_PORT ?? 4173);
 const MAX_BODY_BYTES = 1024 * 1024;
+const APP_VERSION = "p7-storage-timeout-partial-results";
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -59,17 +64,23 @@ async function handleApi(request, response) {
   if (request.method === "GET" && url.pathname === "/api/status") {
     sendJson(response, 200, {
       ok: true,
+      version: APP_VERSION,
       env: {
         ogRpcUrl: Boolean(process.env.OG_RPC_URL),
         ogPrivateKey: Boolean(process.env.OG_PRIVATE_KEY),
         ogComputeProviderAddress: Boolean(process.env.OG_COMPUTE_PROVIDER_ADDRESS),
         reclaimAppId: Boolean(process.env.RECLAIM_APP_ID),
         reclaimAppSecret: Boolean(process.env.RECLAIM_APP_SECRET),
+        ensPublishKey: Boolean(process.env.SEPOLIA_PRIVATE_KEY ?? process.env.OG_PRIVATE_KEY),
       },
       modes: {
         policy: ["dry-run", "0g-compute-live"],
         proof: ["fixture-qualified", "fixture-rejected", "reclaim-live"],
         memory: ["dry-run", "0g-storage-live"],
+      },
+      ens: {
+        agentName: process.env.ENS_AGENT_NAME ?? "verigate-agent.eth",
+        network: "sepolia",
       },
     });
     return;
@@ -168,6 +179,7 @@ async function handleApi(request, response) {
     sendJson(response, 200, {
       ok: true,
       logs: [
+        logEntry("server_version", APP_VERSION),
         logEntry("wallet_signature_check", "Source wallet control signature verified transiently."),
         logEntry(
           proofMode === "reclaim-live" ? "reclaim_zktls_proof" : "fixture_zktls_proof",
@@ -199,32 +211,142 @@ async function handleApi(request, response) {
       mode: memoryMode,
       now,
     });
-    const memory = await write0GMemory({
-      policyDraft: body.policy,
-      computeReceipt: body.computeReceipt,
-      applicantProof: body.applicantProof,
-      publicProofMeta: body.publicProofMeta,
-      verificationResult: verification.result,
-      executionReceipt: execution.executionReceipt,
-      mode: memoryMode,
-      now,
-    });
+    let memory;
+    let memoryUploadError = null;
+    try {
+      memory = await write0GMemory({
+        policyDraft: body.policy,
+        computeReceipt: body.computeReceipt,
+        applicantProof: body.applicantProof,
+        publicProofMeta: body.publicProofMeta,
+        verificationResult: verification.result,
+        executionReceipt: execution.executionReceipt,
+        mode: memoryMode,
+        now,
+      });
+    } catch (error) {
+      if (body.memoryMode !== "0g-storage-live") {
+        throw error;
+      }
+
+      memoryUploadError = formatStorageError(error);
+      memory = {
+        tool: "write0GMemory",
+        mode: "0g-storage-live",
+        status: "FAILED",
+        retryable: true,
+        error: memoryUploadError,
+        auditRecord: {
+          eventId: body.policy?.policyId,
+          policyHash: body.applicantProof?.policyHash,
+          proofHash: body.applicantProof?.proof?.proofHash,
+          eventNullifier: body.applicantProof?.antiSybil?.eventNullifier,
+          verifier: {
+            verifierVersion: verification.verifier,
+            result: verification.result.result,
+            reasonCode: verification.result.reasonCode,
+          },
+          storage: {
+            provider: "0G",
+            pointer: null,
+          },
+          createdAt: now,
+        },
+      };
+    }
 
     sendJson(response, 200, {
       ok: true,
       logs: [
         logEntry("deterministic_verifier", `Verifier returned ${verification.result.reasonCode}.`),
         logEntry("execution", `KeeperHub execution status: ${execution.executionReceipt.status}.`),
-        logEntry(
-          body.memoryMode === "0g-storage-live" ? "0g_storage_memory" : "local_audit_memory",
-          body.memoryMode === "0g-storage-live"
-            ? "Audit memory uploaded to 0G Storage."
-            : "Audit memory prepared locally without network upload.",
-        ),
+        memoryUploadError
+          ? logEntry("0g_storage_memory_failed", memoryUploadError)
+          : logEntry(
+            body.memoryMode === "0g-storage-live" ? "0g_storage_memory" : "local_audit_memory",
+            body.memoryMode === "0g-storage-live"
+              ? "Audit memory uploaded to 0G Storage."
+              : "Audit memory prepared locally without network upload.",
+          ),
       ],
       verification,
       execution,
       memory,
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/ens/identity") {
+    const body = await readJson(request);
+    const payload = buildEnsPayloadForRequest(body, request);
+    const resolver = createEnsResolverAdapter();
+    const [agent, event] = await Promise.all([
+      resolver.resolveIdentity({ name: payload.agentName }),
+      resolver.resolveIdentity({ name: payload.eventName }),
+    ]);
+    const alignment = event.exists
+      ? validateEnsRecordAlignment({ payload, resolvedTextRecords: event.textRecords })
+      : [];
+
+    sendJson(response, 200, {
+      ok: true,
+      logs: [
+        logEntry("ens_identity_plan", `Event ENS identity prepared: ${payload.eventName}.`),
+        logEntry(
+          event.exists ? "ens_event_resolved" : "ens_event_unresolved",
+          event.exists ? "Event ENS resolver records loaded." : "Event ENS resolver is not configured yet.",
+        ),
+      ],
+      payload,
+      resolved: {
+        agent,
+        event,
+      },
+      alignment,
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/ens/publish") {
+    const body = await readJson(request);
+    const payload = buildEnsPayloadForRequest(body, request);
+    const published = await publishEnsTextRecords({
+      name: payload.eventName,
+      records: payload.textRecords,
+    });
+    const resolver = createEnsResolverAdapter();
+    const [agent, event] = await Promise.all([
+      resolver.resolveIdentity({ name: payload.agentName }),
+      resolver.resolveIdentity({ name: payload.eventName }),
+    ]);
+    const alignment = event.exists
+      ? validateEnsRecordAlignment({ payload, resolvedTextRecords: event.textRecords })
+      : [];
+    const aligned = alignment.length > 0 && alignment.every((check) => check.matches);
+
+    sendJson(response, 200, {
+      ok: true,
+      logs: [
+        logEntry("ens_identity_plan", `Event ENS identity prepared: ${payload.eventName}.`),
+        logEntry(
+          "ens_event_published",
+          `Published ${published.txs.length} ENS text records${published.multicall ? " in one multicall" : ""}.`,
+        ),
+        logEntry("ens_event_resolved", "Event ENS resolver records loaded after publish."),
+        logEntry(
+          aligned ? "ens_alignment_ok" : "ens_alignment_mismatch",
+          aligned
+            ? "ENS records match the current workflow result."
+            : "ENS records still differ from the current workflow result.",
+        ),
+      ],
+      payload,
+      published,
+      resolved: {
+        agent,
+        event,
+      },
+      alignment,
     });
     return;
   }
@@ -298,6 +420,36 @@ function logEntry(step, message) {
     step,
     message,
   };
+}
+
+function formatStorageError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/timed out/i.test(message) || /Waiting for storage node to sync/i.test(message)) {
+    return `${message}. Verifier and execution planning completed; retry the 0G Storage write when the indexer catches up, or switch memory mode to dry-run for local UI testing.`;
+  }
+  if (/socket disconnected|TLS connection|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(message)) {
+    return `${message}. Verifier and execution planning completed; this is a 0G Storage network/indexer connection failure, not a policy verification failure.`;
+  }
+  return message;
+}
+
+function buildEnsPayloadForRequest(body, request) {
+  const agentName = body.agentName ?? process.env.ENS_AGENT_NAME ?? "verigate-agent.eth";
+  const appUrl = body.appUrl ?? `http://${request.headers.host ?? `localhost:${PORT}`}`;
+  const manifestRoot = body.memory?.manifestPointer?.rootHash;
+  const auditPointer = body.auditPointer
+    ?? (manifestRoot ? `0G://${manifestRoot}` : undefined)
+    ?? body.memory?.auditRecord?.storage?.pointer;
+
+  return buildEnsIdentityPayload({
+    policy: body.policy,
+    verificationResult: body.verificationResult,
+    agentName,
+    auditPointer,
+    appUrl,
+    passContract: body.passContract,
+    verifierAddress: body.verifierAddress ?? body.policy?.organizer,
+  });
 }
 
 function fakeReclaimClient(balanceHex) {

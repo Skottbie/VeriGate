@@ -84,6 +84,24 @@
           </div>
         </section>
 
+        <section class="panel">
+          <div class="panel-heading">
+            <span class="step-index">4</span>
+            <div>
+              <h2>ENS Identity</h2>
+              <p>Publish and resolve the VeriGate agent name and event subname discovery records.</p>
+            </div>
+          </div>
+          <div class="controls">
+            <label>
+              Agent ENS
+              <input id="agentEnsName" value="verigate-agent.eth" spellcheck="false">
+            </label>
+            <button id="publishEns">Publish ENS Records</button>
+            <button id="resolveEns" class="secondary">Resolve ENS</button>
+          </div>
+        </section>
+
         <section class="panel result-panel">
           <div class="result-grid">
             <div>
@@ -102,6 +120,10 @@
               <span class="metric-label">Execution</span>
               <strong id="executionMetric">Pending</strong>
             </div>
+            <div>
+              <span class="metric-label">ENS</span>
+              <strong id="ensMetric">Pending</strong>
+            </div>
           </div>
         </section>
       </section>
@@ -117,10 +139,12 @@
           <button class="tab active" data-panel="policyJson">Policy</button>
           <button class="tab" data-panel="proofJson">Proof</button>
           <button class="tab" data-panel="resultJson">Result</button>
+          <button class="tab" data-panel="ensJson">ENS</button>
         </div>
         <pre id="policyJson" class="json-panel active">{}</pre>
         <pre id="proofJson" class="json-panel">{}</pre>
         <pre id="resultJson" class="json-panel">{}</pre>
+        <pre id="ensJson" class="json-panel">{}</pre>
       </aside>
     </main>
 

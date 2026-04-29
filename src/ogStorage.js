@@ -5,6 +5,7 @@ import { canonicalize } from "./canonical.js";
 import { sha256Hex } from "./hash.js";
 
 export const DEFAULT_OG_STORAGE_INDEXER_RPC = "https://indexer-storage-testnet-turbo.0g.ai";
+export const DEFAULT_OG_STORAGE_UPLOAD_TIMEOUT_MS = 90_000;
 
 const FORBIDDEN_PUBLIC_KEY_PATTERNS = [
   /^source.*wallet$/i,
@@ -55,10 +56,45 @@ export function encodePublicMemoryJson(record) {
   return new TextEncoder().encode(`${canonicalize(record)}\n`);
 }
 
+export class OgStorageUploadTimeoutError extends Error {
+  constructor(timeoutMs) {
+    super(
+      `0G Storage upload timed out after ${timeoutMs}ms while waiting for the indexer/storage node to sync`,
+    );
+    this.name = "OgStorageUploadTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function withUploadTimeout(operation, timeoutMs) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new OgStorageUploadTimeoutError(timeoutMs));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export function create0GStorageAdapter({
   rpcUrl = process.env.OG_RPC_URL,
   indexerRpc = process.env.OG_STORAGE_INDEXER_RPC ?? DEFAULT_OG_STORAGE_INDEXER_RPC,
   privateKey = process.env.OG_PRIVATE_KEY,
+  uploadTimeoutMs = parsePositiveInteger(
+    process.env.OG_STORAGE_UPLOAD_TIMEOUT_MS,
+    DEFAULT_OG_STORAGE_UPLOAD_TIMEOUT_MS,
+  ),
   uploadOptions = {},
 } = {}) {
   if (!rpcUrl) {
@@ -99,11 +135,14 @@ export function create0GStorageAdapter({
     }
 
     const localRootHash = tree?.rootHash();
-    const [tx, uploadErr] = await indexer.upload(data, rpcUrl, signer, {
-      ...defaultUploadOptions,
-      ...uploadOptions,
-      ...callUploadOptions,
-    });
+    const [tx, uploadErr] = await withUploadTimeout(
+      indexer.upload(data, rpcUrl, signer, {
+        ...defaultUploadOptions,
+        ...uploadOptions,
+        ...callUploadOptions,
+      }),
+      uploadTimeoutMs,
+    );
     if (uploadErr !== null) {
       throw new Error(`0G upload error: ${uploadErr.message}`);
     }

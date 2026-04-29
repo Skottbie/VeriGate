@@ -3,6 +3,9 @@ const state = {
   computeReceipt: null,
   applicantProof: null,
   publicProofMeta: null,
+  verification: null,
+  memory: null,
+  ens: null,
   walletAddress: null,
   walletMessage: null,
   walletSignature: null,
@@ -15,21 +18,26 @@ const els = {
   policyMode: document.querySelector("#policyMode"),
   proofMode: document.querySelector("#proofMode"),
   memoryMode: document.querySelector("#memoryMode"),
+  agentEnsName: document.querySelector("#agentEnsName"),
   compilePolicy: document.querySelector("#compilePolicy"),
   connectWallet: document.querySelector("#connectWallet"),
   signMessage: document.querySelector("#signMessage"),
   generateProof: document.querySelector("#generateProof"),
   verifyFlow: document.querySelector("#verifyFlow"),
+  publishEns: document.querySelector("#publishEns"),
+  resolveEns: document.querySelector("#resolveEns"),
   walletState: document.querySelector("#walletState"),
   clearLogs: document.querySelector("#clearLogs"),
   logList: document.querySelector("#logList"),
   policyJson: document.querySelector("#policyJson"),
   proofJson: document.querySelector("#proofJson"),
   resultJson: document.querySelector("#resultJson"),
+  ensJson: document.querySelector("#ensJson"),
   policyMetric: document.querySelector("#policyMetric"),
   proofMetric: document.querySelector("#proofMetric"),
   verifierMetric: document.querySelector("#verifierMetric"),
   executionMetric: document.querySelector("#executionMetric"),
+  ensMetric: document.querySelector("#ensMetric"),
 };
 
 boot();
@@ -40,6 +48,8 @@ function boot() {
   els.signMessage.addEventListener("click", signControlMessage);
   els.generateProof.addEventListener("click", generateProof);
   els.verifyFlow.addEventListener("click", verifyFlow);
+  els.publishEns.addEventListener("click", publishEnsIdentity);
+  els.resolveEns.addEventListener("click", resolveEnsIdentity);
   els.clearLogs.addEventListener("click", () => {
     els.logList.innerHTML = "";
   });
@@ -67,8 +77,9 @@ async function refreshStatus() {
       env.ogComputeProviderAddress,
       env.reclaimAppId,
       env.reclaimAppSecret,
+      env.ensPublishKey,
     ].filter(Boolean).length;
-    els.envStatus.innerHTML = `<span class="${ready === 5 ? "ok" : "warn"}">${ready}/5 live env vars present</span>`;
+    els.envStatus.innerHTML = `<span class="${ready === 6 ? "ok" : "warn"}">${ready}/6 live env vars present</span><br>${escapeHtml(status.version ?? "unknown")}`;
   } catch (error) {
     els.envStatus.innerHTML = `<span class="bad">${escapeHtml(error.message)}</span>`;
   }
@@ -92,6 +103,9 @@ async function compilePolicy() {
     state.computeReceipt = result.compute.computeReceipt;
     state.applicantProof = null;
     state.publicProofMeta = null;
+    state.verification = null;
+    state.memory = null;
+    state.ens = null;
     state.walletMessage = null;
     state.walletSignature = null;
     state.expiresAt = null;
@@ -107,10 +121,12 @@ async function compilePolicy() {
     });
     setJson(els.proofJson, {});
     setJson(els.resultJson, {});
+    setJson(els.ensJson, {});
     els.policyMetric.textContent = shortHash(result.review.policyHash);
     els.proofMetric.textContent = "Pending";
     els.verifierMetric.textContent = "Pending";
     els.executionMetric.textContent = "Pending";
+    els.ensMetric.textContent = "Pending";
   });
 }
 
@@ -216,9 +232,53 @@ async function verifyFlow() {
     });
     writeLogs(result.logs);
     setJson(els.resultJson, result);
+    state.verification = result.verification.result;
+    state.memory = result.memory;
     els.verifierMetric.textContent = result.verification.result.reasonCode;
     els.verifierMetric.className = result.verification.result.approved ? "ok" : "bad";
     els.executionMetric.textContent = result.execution.executionReceipt.status;
+  });
+}
+
+async function resolveEnsIdentity() {
+  if (!state.policy) {
+    writeLog("ens", "Compile a policy before resolving ENS identity.");
+    return;
+  }
+
+  await withBusy(els.resolveEns, async () => {
+    const result = await apiPost("/api/ens/identity", {
+      policy: state.policy,
+      verificationResult: state.verification,
+      memory: state.memory,
+      agentName: els.agentEnsName.value.trim(),
+      appUrl: window.location.origin,
+    });
+    state.ens = result;
+    writeLogs(result.logs);
+    setJson(els.ensJson, result);
+    updateEnsMetric(result);
+  });
+}
+
+async function publishEnsIdentity() {
+  if (!state.policy || !state.verification || !state.memory) {
+    writeLog("ens", "Verify and write memory before publishing ENS records.");
+    return;
+  }
+
+  await withBusy(els.publishEns, async () => {
+    const result = await apiPost("/api/ens/publish", {
+      policy: state.policy,
+      verificationResult: state.verification,
+      memory: state.memory,
+      agentName: els.agentEnsName.value.trim(),
+      appUrl: window.location.origin,
+    });
+    state.ens = result;
+    writeLogs(result.logs);
+    setJson(els.ensJson, result);
+    updateEnsMetric(result);
   });
 }
 
@@ -274,6 +334,22 @@ function writeLog(step, message, at = new Date().toISOString()) {
 
 function setJson(element, value) {
   element.textContent = JSON.stringify(value, null, 2);
+}
+
+function updateEnsMetric(result) {
+  const aligned = Array.isArray(result.alignment)
+    && result.alignment.length > 0
+    && result.alignment.every((check) => check.matches);
+  if (aligned) {
+    els.ensMetric.textContent = "Aligned";
+    els.ensMetric.className = "ok";
+  } else if (result.resolved?.event?.exists) {
+    els.ensMetric.textContent = "Mismatch";
+    els.ensMetric.className = "warn";
+  } else {
+    els.ensMetric.textContent = "Unconfigured";
+    els.ensMetric.className = "warn";
+  }
 }
 
 function maskAddress(address) {

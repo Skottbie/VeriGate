@@ -24,6 +24,19 @@ export {
 } from "./verifier.js";
 
 export {
+  DEFAULT_AGENT_ENS_NAME,
+  DEFAULT_ENS_NETWORK,
+  ENS_TEXT_KEYS,
+  buildEnsIdentityPayload,
+  buildEnsTextRecords,
+  buildEventEnsLabel,
+  buildEventEnsName,
+  createEnsResolverAdapter,
+  publishEnsTextRecords,
+  validateEnsRecordAlignment
+} from "./ensIdentity.js";
+
+export {
   assertPublicProofSafe,
   assertReclaimResourcesReady,
   buildApplicantProofFromReclaim,

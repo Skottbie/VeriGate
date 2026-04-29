@@ -30,6 +30,22 @@ const FORBIDDEN_PUBLIC_KEYS = [
   /^balance$/i,
   /^balanceHex$/i,
 ];
+const PUBLIC_VALUE_PATHS = new Set([
+  "$.eventId",
+  "$.policyHash",
+  "$.applicantCommitment",
+  "$.antiSybil.eventNullifier",
+  "$.claims.asset",
+  "$.claims.aggregatedExposureTier",
+  "$.claims.holdingDurationTier",
+  "$.proof.proofHash",
+  "$.proof.proofType",
+  "$.proof.expiresAt",
+  "$.proofType",
+  "$.proofSha256",
+  "$.identifier",
+  "$.note",
+]);
 
 export function buildWalletControlMessage({
   eventId,
@@ -274,20 +290,30 @@ export function buildPublicReclaimProofMeta(reclaimProof) {
 }
 
 export function assertPublicProofSafe(value, { forbiddenValues = [] } = {}) {
-  const forbidden = forbiddenValues.filter(Boolean).map((item) => String(item).toLowerCase());
+  const forbidden = forbiddenValues
+    .filter(Boolean)
+    .map((item) => String(item).toLowerCase())
+    .filter((item) => item.length >= 12);
   visitPublicValue(value, "$", (path, key, nested) => {
     if (key && FORBIDDEN_PUBLIC_KEYS.some((pattern) => pattern.test(key))) {
       throw new Error(`public proof leaks forbidden key ${path}`);
     }
-    if (typeof nested === "string") {
+    if (typeof nested === "string" && !isAllowedPublicValuePath(path)) {
       const lower = nested.toLowerCase();
       for (const secret of forbidden) {
-        if (secret && lower.includes(secret)) {
+        if (lower === secret || lower.includes(secret)) {
           throw new Error(`public proof leaks forbidden value at ${path}`);
         }
       }
     }
   });
+}
+
+function isAllowedPublicValuePath(path) {
+  return PUBLIC_VALUE_PATHS.has(path)
+    || /^\$\.walletCommitments\[\d+\]$/.test(path)
+    || /^\$\.witnesses\[\d+\]\.(id|url)$/.test(path)
+    || /^\$\.signatures\[\d+\]$/.test(path);
 }
 
 export function extractBalanceHex(zkResponse) {

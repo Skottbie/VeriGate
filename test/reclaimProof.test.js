@@ -127,11 +127,18 @@ test("public event id is allowed even when it also appears in a wallet-control m
     { eventId: "private_eth_holder_gate" },
     { forbiddenValues: ["0x1111111111111111111111111111111111111111"] },
   ));
-  assert.throws(() => assertPublicProofSafe(
+  assert.doesNotThrow(() => assertPublicProofSafe(
     { eventId: "private_eth_holder_gate" },
     { forbiddenValues: ["private_eth_holder_gate"] },
-  ), /forbidden value/);
+  ));
   assert.ok(message.includes("private_eth_holder_gate"));
+});
+
+test("privacy guard still rejects forbidden wallet values in non-public fields", () => {
+  assert.throws(() => assertPublicProofSafe(
+    { nested: { leak: "0x1111111111111111111111111111111111111111" } },
+    { forbiddenValues: ["0x1111111111111111111111111111111111111111"] },
+  ), /forbidden value/);
 });
 
 test("extractBalanceHex accepts named Reclaim captures", () => {
