@@ -7,7 +7,7 @@ import { validateComputeReceipt, validateEligibilityPolicy } from "./schemas.js"
 
 const DEFAULT_POLICY_COMPILER_MODEL_HINT = "qwen-2.5-7b-instruct";
 
-export function buildPolicyCompilerPrompt(organizerIntent) {
+export function buildPolicyCompilerPrompt(organizerIntent, { organizerAddress } = {}) {
   if (typeof organizerIntent !== "string" || organizerIntent.trim().length === 0) {
     throw new TypeError("organizerIntent must be a non-empty string");
   }
@@ -36,6 +36,9 @@ export function buildPolicyCompilerPrompt(organizerIntent) {
     "}",
     "Rules:",
     "- Asset must be ETH only.",
+    organizerAddress
+      ? `- Organizer address is system-provided as ${organizerAddress}; do not invent another organizer.`
+      : "- Organizer address is system-provided and will be enforced after generation.",
     "- Do not include source wallet addresses, exact balances, request headers, API secrets, or raw proofs.",
     "- LLM compiles policy only; deterministic verifier decides pass/fail later.",
     "",
@@ -67,8 +70,15 @@ export function extractJsonObject(text) {
   return JSON.parse(trimmed.slice(start, end + 1));
 }
 
-export function finalizePolicyDraft(policyDraft, { now = new Date(), agentVersion = "p4-0g-compute" } = {}) {
+export function finalizePolicyDraft(policyDraft, {
+  now = new Date(),
+  agentVersion = "p4-0g-compute",
+  organizerAddress,
+} = {}) {
   const finalized = structuredClone(policyDraft);
+  if (organizerAddress) {
+    finalized.organizer = organizerAddress;
+  }
   finalized.requiredClaims ??= ["ETH_HOLDER"];
   finalized.privacy ??= {};
   finalized.privacy.revealWalletAddress ??= false;
@@ -186,8 +196,8 @@ export function create0GComputeAdapter({
     };
   }
 
-  async function compilePolicyWith0GCompute(organizerIntent) {
-    const prompt = buildPolicyCompilerPrompt(organizerIntent);
+  async function compilePolicyWith0GCompute(organizerIntent, { organizerAddress } = {}) {
+    const prompt = buildPolicyCompilerPrompt(organizerIntent, { organizerAddress });
     const messages = [
       {
         role: "system",
@@ -203,7 +213,7 @@ export function create0GComputeAdapter({
       contentForBilling: prompt,
     });
     const parsed = extractJsonObject(compute.output);
-    const policyDraft = finalizePolicyDraft(parsed, { now: now() });
+    const policyDraft = finalizePolicyDraft(parsed, { now: now(), organizerAddress });
     const receipt = createComputeReceipt({
       prompt,
       output: compute.output,

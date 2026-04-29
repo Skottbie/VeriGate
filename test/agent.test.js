@@ -79,6 +79,54 @@ test("live workflow memory writer uploads policy, compute, audit, execution, and
   assert.match(liveMemory.manifestPointer.rootHash, /^0x/);
 });
 
+test("live workflow memory writer stores public Reclaim proof metadata", async () => {
+  const uploads = [];
+  const result = await runVeriGateDryRun();
+  const publicProofMeta = {
+    redacted: true,
+    proofType: "reclaim_zkfetch",
+    proofSha256: "0xproofmeta",
+    identifier: "0xidentifier",
+    witnesses: [{ id: "0xwitness", url: "wss://attestor.reclaimprotocol.org:444/ws" }],
+    signatures: ["0xsignature"],
+    note: "Raw Reclaim proof, request body, source wallet, and exact ETH balance are withheld from public memory.",
+  };
+
+  const liveMemory = await import("../scripts/agent/tools.js").then(({ write0GMemory }) => write0GMemory({
+    policyDraft: result.compute.policyDraft,
+    computeReceipt: result.compute.computeReceipt,
+    applicantProof: result.proofRequest.proof,
+    publicProofMeta,
+    verificationResult: result.verification.result,
+    executionReceipt: result.execution.executionReceipt,
+    mode: "0g-compute-live",
+    storageAdapter: {
+      async uploadJson({ eventId, namespace, kind, object }) {
+        uploads.push({ eventId, namespace, kind, object });
+        return {
+          provider: "0G",
+          rootHash: `0x${kind.replace(/[^a-z]/g, "").padEnd(64, "0").slice(0, 64)}`,
+          txHash: `0x${kind.replace(/[^a-z]/g, "").padEnd(64, "1").slice(0, 64)}`,
+        };
+      },
+    },
+  }));
+
+  assert.deepEqual(uploads.map((upload) => upload.kind), [
+    "policy",
+    "compute-receipts",
+    "proof-metadata",
+    "audit",
+    "execution",
+    "manifest",
+  ]);
+  assert.deepEqual(uploads.find((upload) => upload.kind === "proof-metadata").object, publicProofMeta);
+  assert.equal(liveMemory.auditRecord.proofMetadata.provider, "Reclaim");
+  assert.equal(liveMemory.auditRecord.proofMetadata.proofSha256, publicProofMeta.proofSha256);
+  assert.match(liveMemory.auditRecord.proofMetadata.pointer, /^0G:\/\//);
+  assert.match(liveMemory.pointers["proof-metadata"].rootHash, /^0x/);
+});
+
 test("0G Compute policy compiler path calls the live adapter without fallback", async () => {
   let called = false;
   const result = await createPolicyFromIntentWith0GCompute({

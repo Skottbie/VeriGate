@@ -26,12 +26,13 @@ const VERIFIER_SUPPORTED_CLAIMS = new Set([
   "ETH_HOLDER",
   "MULTI_WALLET_AGGREGATION"
 ]);
+const ETH_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
 export function validateEligibilityPolicy(policy) {
   object(policy, "policy");
   requiredString(policy.policyId, "policy.policyId");
   requiredString(policy.eventName, "policy.eventName");
-  requiredString(policy.organizer, "policy.organizer");
+  requiredAddress(policy.organizer, "policy.organizer");
   enumArray(policy.requiredClaims, CLAIMS, "policy.requiredClaims");
 
   object(policy.privacy, "policy.privacy");
@@ -163,6 +164,13 @@ function object(value, field) {
 function requiredString(value, field) {
   if (typeof value !== "string" || value.length === 0) {
     throw new TypeError(`${field} must be a non-empty string`);
+  }
+}
+
+function requiredAddress(value, field) {
+  requiredString(value, field);
+  if (!ETH_ADDRESS.test(value)) {
+    throw new TypeError(`${field} must be a 0x-prefixed 20-byte address`);
   }
 }
 

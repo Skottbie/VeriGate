@@ -135,7 +135,7 @@ function makePolicy(overrides = {}) {
   return {
     policyId: "policy-eth-holder-1",
     eventName: "Private ETH Holder Meetup",
-    organizer: "organizer-1",
+    organizer: "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
     requiredClaims: ["ETH_HOLDER", "MULTI_WALLET_AGGREGATION"],
     privacy: {
       revealWalletAddress: false,

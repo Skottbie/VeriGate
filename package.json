@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/verifier.test.js && node test/ogCompute.test.js && node test/agent.test.js && hardhat test test/contracts.test.js",
+    "test": "node test/verifier.test.js && node test/ogCompute.test.js && node test/agent.test.js && node test/reclaimProof.test.js && hardhat test test/contracts.test.js",
     "test:verifier": "node test/verifier.test.js",
     "test:contracts": "hardhat test test/contracts.test.js",
     "test:0g:storage": "node scripts/test-0g-storage.js",
     "test:0g:compute": "node test/ogCompute.test.js",
     "test:0g:compute:live": "node scripts/test-0g-compute.js",
+    "test:reclaim": "node test/reclaimProof.test.js",
+    "test:reclaim:live": "node scripts/test-reclaim-proof.js",
+    "setup:reclaim": "node scripts/setup-reclaim-resources.js",
+    "dev:web": "node scripts/web-server.js",
     "setup:0g:compute": "node scripts/setup-0g-compute-account.js",
     "agent:dry-run": "node scripts/agent/dry-run.js",
     "agent:tool": "node scripts/agent/tool.js",
@@ -27,7 +31,8 @@
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.6",
-    "@0glabs/0g-serving-broker": "^0.7.5"
+    "@0glabs/0g-serving-broker": "^0.7.5",
+    "@reclaimprotocol/zk-fetch": "^0.8.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.9",

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VeriGate Test Console</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">VeriAgent Mesh</p>
+            <h1>VeriGate Test Console</h1>
+          </div>
+          <div class="status" id="envStatus">Checking environment...</div>
+        </header>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <span class="step-index">1</span>
+            <div>
+              <h2>Organizer Intent</h2>
+              <p>Compile a private ETH holder gate into a structured policy using your connected wallet as organizer.</p>
+            </div>
+          </div>
+          <textarea id="organizerIntent" spellcheck="false">Create a private ETH holder gate for AI agent builders. Users should prove qualified ETH exposure but reveal no wallet addresses or exact balances. One applicant can only RSVP once, and qualified applicants should receive an RSVP pass.</textarea>
+          <div class="controls">
+            <label>
+              Policy compiler
+              <select id="policyMode">
+                <option value="0g-compute-live">0G Compute live</option>
+                <option value="dry-run">Dry run</option>
+              </select>
+            </label>
+            <button id="compilePolicy">Compile Policy</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <span class="step-index">2</span>
+            <div>
+              <h2>Applicant Proof</h2>
+              <p>Use the connected wallet as a source wallet, sign a control message, then create a zkTLS proof.</p>
+            </div>
+          </div>
+          <div class="wallet-row">
+            <button id="connectWallet" class="secondary">Connect Wallet</button>
+            <button id="signMessage" class="secondary">Sign Control Message</button>
+            <span id="walletState" class="muted">No wallet connected</span>
+          </div>
+          <div class="controls">
+            <label>
+              Proof source
+              <select id="proofMode">
+                <option value="fixture-qualified">Fixture qualified</option>
+                <option value="fixture-rejected">Fixture rejected</option>
+                <option value="reclaim-live">Reclaim live</option>
+              </select>
+            </label>
+            <button id="generateProof">Generate Proof</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <span class="step-index">3</span>
+            <div>
+              <h2>Verifier + Memory</h2>
+              <p>Run deterministic verification and prepare execution/audit memory.</p>
+            </div>
+          </div>
+          <div class="controls">
+            <label>
+              Audit memory
+              <select id="memoryMode">
+                <option value="dry-run">Local dry run</option>
+                <option value="0g-storage-live">0G Storage live</option>
+              </select>
+            </label>
+            <button id="verifyFlow">Verify + Write Memory</button>
+          </div>
+        </section>
+
+        <section class="panel result-panel">
+          <div class="result-grid">
+            <div>
+              <span class="metric-label">Policy</span>
+              <strong id="policyMetric">Pending</strong>
+            </div>
+            <div>
+              <span class="metric-label">Proof</span>
+              <strong id="proofMetric">Pending</strong>
+            </div>
+            <div>
+              <span class="metric-label">Verifier</span>
+              <strong id="verifierMetric">Pending</strong>
+            </div>
+            <div>
+              <span class="metric-label">Execution</span>
+              <strong id="executionMetric">Pending</strong>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="debug">
+        <div class="debug-header">
+          <h2>Debug Logs</h2>
+          <button id="clearLogs" class="ghost">Clear</button>
+        </div>
+        <ol id="logList" class="log-list"></ol>
+
+        <div class="tabs">
+          <button class="tab active" data-panel="policyJson">Policy</button>
+          <button class="tab" data-panel="proofJson">Proof</button>
+          <button class="tab" data-panel="resultJson">Result</button>
+        </div>
+        <pre id="policyJson" class="json-panel active">{}</pre>
+        <pre id="proofJson" class="json-panel">{}</pre>
+        <pre id="resultJson" class="json-panel">{}</pre>
+      </aside>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

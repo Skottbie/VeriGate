@@ -74,6 +74,33 @@ test("finalizePolicyDraft overrides model-supplied metadata timestamps", () => {
   assert.equal(policy.metadata.agentVersion, "p5-openclaw-agent");
 });
 
+test("finalizePolicyDraft overrides model-supplied organizer with system organizer", () => {
+  const draft = samplePolicy();
+  draft.organizer = "0xABCDEF1234567890BCDEF1234567890ABCDEF12";
+
+  const policy = finalizePolicyDraft(draft, {
+    now: fixedNow(),
+    organizerAddress: "0x1111111111111111111111111111111111111111",
+  });
+
+  assert.equal(policy.organizer, "0x1111111111111111111111111111111111111111");
+});
+
+test("finalizePolicyDraft rejects invalid organizer addresses", () => {
+  const draft = samplePolicy();
+  draft.organizer = "0xABCDEF1234567890BCDEF1234567890ABCDEF12";
+
+  assert.throws(() => finalizePolicyDraft(draft, { now: fixedNow() }), /20-byte address/);
+});
+
+test("buildPolicyCompilerPrompt tells the model organizer is system-provided", () => {
+  const prompt = buildPolicyCompilerPrompt("Create an ETH holder gate", {
+    organizerAddress: "0x1111111111111111111111111111111111111111",
+  });
+  assert.match(prompt, /system-provided/);
+  assert.match(prompt, /0x1111111111111111111111111111111111111111/);
+});
+
 test("createComputeReceipt binds prompt, output, policy, provider, and model", () => {
   const policyDraft = finalizePolicyDraft(samplePolicy(), { now: fixedNow() });
   const receipt = createComputeReceipt({

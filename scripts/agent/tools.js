@@ -8,6 +8,7 @@ import {
 } from "../../src/ogCompute.js";
 import { create0GStorageAdapter, createEventMemoryNamespace } from "../../src/ogStorage.js";
 import {
+  assertPublicProofSafe,
   canonicalize,
   generateEventNullifier,
   hashPolicy,
@@ -42,13 +43,14 @@ export async function createPolicyFromIntent(options = {}) {
 
 export async function createPolicyFromIntentDryRun({
   organizerIntent = DEFAULT_ORGANIZER_INTENT,
+  organizerAddress,
   now = DEFAULT_NOW,
 } = {}) {
-  const prompt = buildPolicyCompilerPrompt(organizerIntent);
+  const prompt = buildPolicyCompilerPrompt(organizerIntent, { organizerAddress });
   const rawOutput = JSON.stringify({
     policyId: "policy-open-agents-eth-holder-v1",
     eventName: "Open Agents ETH Holder Gate",
-    organizer: "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
+    organizer: organizerAddress ?? "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
     requiredClaims: ["ETH_HOLDER"],
     privacy: {
       revealWalletAddress: false,
@@ -73,6 +75,7 @@ export async function createPolicyFromIntentDryRun({
   const policyDraft = finalizePolicyDraft(JSON.parse(rawOutput), {
     now: new Date(now),
     agentVersion: "p5-openclaw-agent",
+    organizerAddress,
   });
   const computeReceipt = createComputeReceipt({
     prompt,
@@ -96,9 +99,10 @@ export async function createPolicyFromIntentDryRun({
 
 export async function createPolicyFromIntentWith0GCompute({
   organizerIntent = DEFAULT_ORGANIZER_INTENT,
+  organizerAddress,
   adapter = create0GComputeAdapter(),
 } = {}) {
-  const result = await adapter.compilePolicyWith0GCompute(organizerIntent);
+  const result = await adapter.compilePolicyWith0GCompute(organizerIntent, { organizerAddress });
   return {
     tool: "createPolicyFromIntent",
     mode: "0g-compute-live",
@@ -201,6 +205,7 @@ export async function write0GMemory({
   policyDraft,
   computeReceipt,
   applicantProof,
+  publicProofMeta,
   verificationResult,
   executionReceipt,
   mode = "dry-run",
@@ -230,12 +235,23 @@ export async function write0GMemory({
     },
     createdAt: now,
   };
+  if (publicProofMeta) {
+    assertPublicProofSafe(publicProofMeta);
+    auditRecord.proofMetadata = {
+      provider: "Reclaim",
+      proofType: publicProofMeta.proofType,
+      proofSha256: publicProofMeta.proofSha256,
+      identifier: publicProofMeta.identifier,
+      pointer: mode === "0g-compute-live" ? "0G://live-workflow/proof-metadata-pending" : "0G://dry-run/proof-metadata",
+    };
+  }
 
   if (mode === "0g-compute-live") {
     return writeLive0GMemory({
       policyDraft,
       computeReceipt,
       auditRecord: validateAuditRecord(auditRecord),
+      publicProofMeta,
       executionReceipt,
       storageAdapter,
     });
@@ -270,10 +286,11 @@ export function executePassIssuance({ policyDraft, verificationResult, mode = "d
 
 export async function runVeriGateWorkflow({
   organizerIntent = DEFAULT_ORGANIZER_INTENT,
+  organizerAddress,
   mode = "0g-compute-live",
   now = DEFAULT_NOW,
 } = {}) {
-  const compute = await createPolicyFromIntent({ organizerIntent, mode, now });
+  const compute = await createPolicyFromIntent({ organizerIntent, organizerAddress, mode, now });
   const review = validatePolicy(compute.policyDraft);
   const privacyPlan = generatePrivacyPlan(compute.policyDraft);
   const proofRequest = requestApplicantProof({ policyDraft: compute.policyDraft });
@@ -292,6 +309,7 @@ export async function runVeriGateWorkflow({
     policyDraft: compute.policyDraft,
     computeReceipt: compute.computeReceipt,
     applicantProof: proofRequest.proof,
+    publicProofMeta: proofRequest.publicProofMeta,
     verificationResult: verification.result,
     executionReceipt: execution.executionReceipt,
     mode,
@@ -375,6 +393,7 @@ async function writeLive0GMemory({
   policyDraft,
   computeReceipt,
   auditRecord,
+  publicProofMeta,
   executionReceipt,
   storageAdapter = create0GStorageAdapter(),
 }) {
@@ -404,8 +423,27 @@ async function writeLive0GMemory({
     object: computeReceipt,
   });
 
+  if (publicProofMeta) {
+    assertPublicProofSafe(publicProofMeta);
+    pointers["proof-metadata"] = await storageAdapter.uploadJson({
+      eventId,
+      namespace,
+      kind: "proof-metadata",
+      object: publicProofMeta,
+    });
+  }
+
   const liveAuditRecord = validateAuditRecord({
     ...auditRecord,
+    proofMetadata: publicProofMeta
+      ? {
+          provider: "Reclaim",
+          proofType: publicProofMeta.proofType,
+          proofSha256: publicProofMeta.proofSha256,
+          identifier: publicProofMeta.identifier,
+          pointer: `0G://${pointers["proof-metadata"].rootHash}`,
+        }
+      : auditRecord.proofMetadata,
     storage: {
       provider: "0G",
       pointer: `0G://${pointers["compute-receipts"].rootHash}`,
