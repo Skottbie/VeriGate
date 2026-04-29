@@ -1,6 +1,7 @@
 # KeeperHub Builder Feedback
 
 Generated at: 2026-04-29T14:36:30.443Z  
+Last updated at: 2026-04-29T23:09:02.825+08:00  
 Project: VeriAgent Mesh / VeriGate
 
 ## Summary
@@ -153,6 +154,12 @@ The request body is encoded according to the Direct Execution schema:
   "gasLimitMultiplier": "1.2"
 }
 ```
+
+## Report Log
+
+- 2026-04-29T23:09:02.825+08:00: Reported to the KeeperHub Discord by `skottbie_92270`.
+  - Discord thread: https://discord.com/channels/1485135725585371266/1485165916869365770/threads/1499064751664140420
+  - Report type: documentation gap / reproducible authentication mismatch.
 
 ## Related Links
 
