@@ -51,6 +51,22 @@ export {
   verifyWalletControlSignature
 } from "./reclaimProof.js";
 
+export {
+  DEFAULT_KEEPERHUB_API_BASE_URL,
+  DEFAULT_KEEPERHUB_DEPLOYMENT_PATH,
+  DEFAULT_KEEPERHUB_NETWORK,
+  EVENT_PASS_ABI,
+  EVENT_PASS_KEEPERHUB_ABI,
+  assertKeeperHubNetworkSupportedForDeployment,
+  buildPassIssuancePlan,
+  buildKeeperHubContractCallBody,
+  createKeeperHubClient,
+  deriveChainEventId,
+  executePassIssuanceOnchain,
+  normalizeAbiForKeeperHub,
+  resolveKeeperHubExecutionTarget
+} from "./keeperHub.js";
+
 // I/O adapters such as ogStorage.js intentionally stay out of the pure core
 // barrel. Import them directly from their module so verifier consumers do not
 // pull network-facing dependencies by default.

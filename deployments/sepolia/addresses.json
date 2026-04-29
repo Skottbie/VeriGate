@@ -1,0 +1,12 @@
+{
+  "network": "Sepolia",
+  "chainId": 11155111,
+  "deployer": "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
+  "contracts": {
+    "EventRegistry": "0xc233c7cDCD2B9D5827beb5FafEf6B67752B2c34f",
+    "NullifierRegistry": "0x02741144c59870aD1CFa51b5D0b6dd97D27aabac",
+    "VerifierReceiptRegistry": "0x9aB41705c802C426dBdcFE377F5A96e76F4c51cb",
+    "EventPassSBT": "0xb283e3D15538529cf7D250663a4436695e8C928e"
+  },
+  "createdAt": "2026-04-29T15:45:15.001Z"
+}

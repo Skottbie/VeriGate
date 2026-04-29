@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, isAbsolute, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import dotenv from "dotenv";
@@ -12,12 +12,14 @@ import {
   validatePolicy,
   verifyApplicantProof,
   write0GMemory,
+  writePassExecutionMemory,
 } from "./agent/tools.js";
 import {
   assertPublicProofSafe,
   buildWalletControlMessage,
   buildEnsIdentityPayload,
   createEnsResolverAdapter,
+  executePassIssuanceOnchain,
   hashPolicy,
   publishEnsTextRecords,
   requestReclaimEthHolderProof,
@@ -28,9 +30,10 @@ dotenv.config({ quiet: true });
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PUBLIC_ROOT = join(ROOT, "public");
+const VENDOR_ROOT = join(ROOT, "node_modules");
 const PORT = Number(process.env.VERIGATE_WEB_PORT ?? 4173);
 const MAX_BODY_BYTES = 1024 * 1024;
-const APP_VERSION = "p7-storage-timeout-partial-results";
+const APP_VERSION = "p8-keeperhub-recipient-privacy";
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -72,16 +75,75 @@ async function handleApi(request, response) {
         reclaimAppId: Boolean(process.env.RECLAIM_APP_ID),
         reclaimAppSecret: Boolean(process.env.RECLAIM_APP_SECRET),
         ensPublishKey: Boolean(process.env.SEPOLIA_PRIVATE_KEY ?? process.env.OG_PRIVATE_KEY),
+        keeperHubApiKey: Boolean(process.env.KH_API_KEY),
       },
       modes: {
         policy: ["dry-run", "0g-compute-live"],
         proof: ["fixture-qualified", "fixture-rejected", "reclaim-live"],
         memory: ["dry-run", "0g-storage-live"],
+        passExecution: ["dry-run", "direct-live", "keeperhub-live"],
       },
       ens: {
         agentName: process.env.ENS_AGENT_NAME ?? "verigate-agent.eth",
         network: "sepolia",
       },
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/pass/execute") {
+    const body = await readJson(request);
+    const mode = body.executionMode ?? "direct-live";
+    const result = await executePassIssuanceOnchain({
+      policy: body.policy,
+      applicantProof: body.applicantProof,
+      verificationResult: body.verificationResult,
+      recipientAddress: body.recipientAddress,
+      sourceWalletAddress: body.sourceWalletAddress,
+      memory: body.memory,
+      mode,
+    });
+    let memoryUpdate = null;
+    let memoryUpdateError = null;
+    if (body.memory?.mode === "0g-storage-live") {
+      try {
+        memoryUpdate = await writePassExecutionMemory({
+          policyDraft: body.policy,
+          executionReceipt: result.executionReceipt,
+          mode: "0g-compute-live",
+        });
+      } catch (error) {
+        memoryUpdateError = formatStorageError(error);
+        memoryUpdate = {
+          tool: "writePassExecutionMemory",
+          mode: "0g-storage-live",
+          status: "FAILED",
+          retryable: true,
+          error: memoryUpdateError,
+        };
+      }
+    }
+
+    sendJson(response, 200, {
+      ok: true,
+      logs: [
+        logEntry("fresh_pass_wallet", "Fresh pass recipient accepted; private key stayed in the browser."),
+        logEntry("chain_receipt", `Verifier receipt prepared for ${result.plan.receiptId}.`),
+        logEntry(
+          mode === "keeperhub-live" ? "keeperhub_execution" : "direct_execution",
+          result.executionReceipt.status === "MINTED"
+            ? `Pass minted to fresh recipient: ${result.executionReceipt.txHash}.`
+            : `Pass execution status: ${result.executionReceipt.status}.${formatExecutionError(result.executionReceipt.error)}`,
+        ),
+        memoryUpdate
+          ? logEntry(
+            memoryUpdateError ? "pass_execution_memory_failed" : "pass_execution_memory",
+            memoryUpdateError ?? "Pass execution receipt written to 0G Storage.",
+          )
+          : logEntry("pass_execution_memory", "Pass execution receipt kept local because audit memory is not live."),
+      ],
+      execution: result,
+      memoryUpdate,
     });
     return;
   }
@@ -278,7 +340,7 @@ async function handleApi(request, response) {
 
   if (request.method === "POST" && url.pathname === "/api/ens/identity") {
     const body = await readJson(request);
-    const payload = buildEnsPayloadForRequest(body, request);
+    const payload = await buildEnsPayloadForRequest(body, request);
     const resolver = createEnsResolverAdapter();
     const [agent, event] = await Promise.all([
       resolver.resolveIdentity({ name: payload.agentName }),
@@ -309,7 +371,7 @@ async function handleApi(request, response) {
 
   if (request.method === "POST" && url.pathname === "/api/ens/publish") {
     const body = await readJson(request);
-    const payload = buildEnsPayloadForRequest(body, request);
+    const payload = await buildEnsPayloadForRequest(body, request);
     const published = await publishEnsTextRecords({
       name: payload.eventName,
       records: payload.textRecords,
@@ -361,6 +423,20 @@ async function serveStatic(request, response) {
   }
 
   const url = new URL(request.url, `http://${request.headers.host ?? "localhost"}`);
+  if (url.pathname === "/vendor/ethers.umd.min.js") {
+    const data = await readFile(join(VENDOR_ROOT, "ethers", "dist", "ethers.umd.min.js"));
+    response.writeHead(200, {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    if (request.method !== "HEAD") {
+      response.end(data);
+    } else {
+      response.end();
+    }
+    return;
+  }
+
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
   const target = normalize(join(PUBLIC_ROOT, pathname));
   if (!target.startsWith(PUBLIC_ROOT)) {
@@ -433,13 +509,23 @@ function formatStorageError(error) {
   return message;
 }
 
-function buildEnsPayloadForRequest(body, request) {
+function formatExecutionError(error) {
+  if (!error) {
+    return "";
+  }
+  const compact = String(error).replace(/\s+/g, " ").trim();
+  const summary = compact.length > 240 ? `${compact.slice(0, 237)}...` : compact;
+  return ` Error: ${summary}`;
+}
+
+async function buildEnsPayloadForRequest(body, request) {
   const agentName = body.agentName ?? process.env.ENS_AGENT_NAME ?? "verigate-agent.eth";
   const appUrl = body.appUrl ?? `http://${request.headers.host ?? `localhost:${PORT}`}`;
   const manifestRoot = body.memory?.manifestPointer?.rootHash;
   const auditPointer = body.auditPointer
     ?? (manifestRoot ? `0G://${manifestRoot}` : undefined)
     ?? body.memory?.auditRecord?.storage?.pointer;
+  const passContract = body.passContract ?? await resolvePassContractForEns();
 
   return buildEnsIdentityPayload({
     policy: body.policy,
@@ -447,9 +533,24 @@ function buildEnsPayloadForRequest(body, request) {
     agentName,
     auditPointer,
     appUrl,
-    passContract: body.passContract,
+    passContract,
     verifierAddress: body.verifierAddress ?? body.policy?.organizer,
+    agentVersion: APP_VERSION,
   });
+}
+
+async function resolvePassContractForEns() {
+  if (process.env.KH_PASS_CONTRACT) {
+    return process.env.KH_PASS_CONTRACT;
+  }
+  const deploymentPath = process.env.KH_DEPLOYMENT_PATH ?? "deployments/sepolia/addresses.json";
+  const target = isAbsolute(deploymentPath) ? deploymentPath : join(ROOT, deploymentPath);
+  try {
+    const deployment = JSON.parse(await readFile(target, "utf8"));
+    return deployment?.contracts?.EventPassSBT ?? "pending:phase-8-pass-contract";
+  } catch {
+    return "pending:phase-8-pass-contract";
+  }
 }
 
 function fakeReclaimClient(balanceHex) {

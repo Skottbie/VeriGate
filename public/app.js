@@ -5,8 +5,11 @@ const state = {
   publicProofMeta: null,
   verification: null,
   memory: null,
+  passExecution: null,
   ens: null,
   walletAddress: null,
+  passWalletAddress: null,
+  passWalletPrivateKey: null,
   walletMessage: null,
   walletSignature: null,
   expiresAt: null,
@@ -18,15 +21,19 @@ const els = {
   policyMode: document.querySelector("#policyMode"),
   proofMode: document.querySelector("#proofMode"),
   memoryMode: document.querySelector("#memoryMode"),
+  executionMode: document.querySelector("#executionMode"),
   agentEnsName: document.querySelector("#agentEnsName"),
   compilePolicy: document.querySelector("#compilePolicy"),
   connectWallet: document.querySelector("#connectWallet"),
   signMessage: document.querySelector("#signMessage"),
   generateProof: document.querySelector("#generateProof"),
   verifyFlow: document.querySelector("#verifyFlow"),
+  generatePassWallet: document.querySelector("#generatePassWallet"),
+  executePass: document.querySelector("#executePass"),
   publishEns: document.querySelector("#publishEns"),
   resolveEns: document.querySelector("#resolveEns"),
   walletState: document.querySelector("#walletState"),
+  passWalletState: document.querySelector("#passWalletState"),
   clearLogs: document.querySelector("#clearLogs"),
   logList: document.querySelector("#logList"),
   policyJson: document.querySelector("#policyJson"),
@@ -38,6 +45,7 @@ const els = {
   verifierMetric: document.querySelector("#verifierMetric"),
   executionMetric: document.querySelector("#executionMetric"),
   ensMetric: document.querySelector("#ensMetric"),
+  passMetric: document.querySelector("#passMetric"),
 };
 
 boot();
@@ -48,6 +56,8 @@ function boot() {
   els.signMessage.addEventListener("click", signControlMessage);
   els.generateProof.addEventListener("click", generateProof);
   els.verifyFlow.addEventListener("click", verifyFlow);
+  els.generatePassWallet.addEventListener("click", generatePassWallet);
+  els.executePass.addEventListener("click", executePassMint);
   els.publishEns.addEventListener("click", publishEnsIdentity);
   els.resolveEns.addEventListener("click", resolveEnsIdentity);
   els.clearLogs.addEventListener("click", () => {
@@ -78,8 +88,9 @@ async function refreshStatus() {
       env.reclaimAppId,
       env.reclaimAppSecret,
       env.ensPublishKey,
+      env.keeperHubApiKey,
     ].filter(Boolean).length;
-    els.envStatus.innerHTML = `<span class="${ready === 6 ? "ok" : "warn"}">${ready}/6 live env vars present</span><br>${escapeHtml(status.version ?? "unknown")}`;
+    els.envStatus.innerHTML = `<span class="${ready === 7 ? "ok" : "warn"}">${ready}/7 live env vars present</span><br>${escapeHtml(status.version ?? "unknown")}`;
   } catch (error) {
     els.envStatus.innerHTML = `<span class="bad">${escapeHtml(error.message)}</span>`;
   }
@@ -105,7 +116,10 @@ async function compilePolicy() {
     state.publicProofMeta = null;
     state.verification = null;
     state.memory = null;
+    state.passExecution = null;
     state.ens = null;
+    state.passWalletAddress = null;
+    state.passWalletPrivateKey = null;
     state.walletMessage = null;
     state.walletSignature = null;
     state.expiresAt = null;
@@ -127,6 +141,8 @@ async function compilePolicy() {
     els.verifierMetric.textContent = "Pending";
     els.executionMetric.textContent = "Pending";
     els.ensMetric.textContent = "Pending";
+    els.passMetric.textContent = "Pending";
+    els.passWalletState.textContent = "No pass wallet generated";
   });
 }
 
@@ -237,6 +253,65 @@ async function verifyFlow() {
     els.verifierMetric.textContent = result.verification.result.reasonCode;
     els.verifierMetric.className = result.verification.result.approved ? "ok" : "bad";
     els.executionMetric.textContent = result.execution.executionReceipt.status;
+  });
+}
+
+async function generatePassWallet() {
+  await withBusy(els.generatePassWallet, async () => {
+    if (!window.ethers?.Wallet) {
+      writeLog("fresh_pass_wallet", "Ethers browser bundle is not loaded.");
+      return;
+    }
+    const wallet = window.ethers.Wallet.createRandom();
+    state.passWalletAddress = wallet.address;
+    state.passWalletPrivateKey = wallet.privateKey;
+    els.passWalletState.textContent = `Fresh recipient ${maskAddress(wallet.address)}`;
+    writeLog("fresh_pass_wallet", "Fresh pass wallet generated locally; private key was not sent to the server.");
+  });
+}
+
+async function executePassMint() {
+  if (!state.policy || !state.applicantProof || !state.verification || !state.memory) {
+    writeLog("pass_execution", "Verify and write memory before minting a pass.");
+    return;
+  }
+  if (!state.verification.approved) {
+    writeLog("pass_execution", "Rejected proofs cannot trigger pass minting.");
+    return;
+  }
+  if (!state.passWalletAddress) {
+    await generatePassWallet();
+  }
+  if (!state.passWalletAddress) {
+    return;
+  }
+  if (state.walletAddress && state.passWalletAddress.toLowerCase() === state.walletAddress.toLowerCase()) {
+    writeLog("pass_execution", "Fresh pass wallet must differ from the source ETH holder wallet.");
+    return;
+  }
+
+  await withBusy(els.executePass, async () => {
+    const result = await apiPost("/api/pass/execute", {
+      policy: state.policy,
+      applicantProof: state.applicantProof,
+      verificationResult: state.verification,
+      memory: state.memory,
+      recipientAddress: state.passWalletAddress,
+      sourceWalletAddress: state.walletAddress,
+      executionMode: els.executionMode.value,
+    });
+    state.passExecution = result.execution;
+    writeLogs(result.logs);
+    setJson(els.resultJson, {
+      verification: state.verification,
+      memory: state.memory,
+      passExecution: result.execution,
+      passExecutionMemory: result.memoryUpdate,
+    });
+    els.executionMetric.textContent = result.execution.executionReceipt.status;
+    els.executionMetric.className = result.execution.executionReceipt.status === "MINTED" ? "ok" : "warn";
+    els.passMetric.textContent = result.execution.executionReceipt.status;
+    els.passMetric.className = result.execution.executionReceipt.status === "MINTED" ? "ok" : "warn";
   });
 }
 

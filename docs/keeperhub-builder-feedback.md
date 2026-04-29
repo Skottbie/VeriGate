@@ -111,6 +111,18 @@ One of the following should be true:
 - The Direct Execution examples should clarify whether `functionArgs` and `abi` must be JSON strings. They are documented as JSON strings, and using arrays directly caused `Invalid field type` during integration.
 - The supported `network` names should be listed or linked directly from the Direct Execution page. This would help builders understand whether custom EVM networks, such as 0G Galileo, are supported.
 
+## Additional Network Finding
+
+After authentication and request schema were fixed, KeeperHub accepted Direct Execution requests but returned `FAILED` for the project's 0G Galileo pass contract. A non-mutating read-only probe against the same target contract showed the underlying network issue:
+
+```text
+network=0g-galileo -> 400 Unsupported network: 0g-galileo
+network="16602"    -> 400 Chain 16602 not found or not enabled
+network=16602      -> 400 Missing required field; network must be a non-empty string
+```
+
+This means that, at the time of testing, KeeperHub Direct Execution could not execute against the deployed 0G Galileo contract by either network name or numeric chain id string. The API's `Unsupported network` response helpfully listed currently supported names, but this was only discovered after integration attempts.
+
 ## Suggested Fix
 
 Update the Direct Execution documentation to include an authentication example that matches the live API:
@@ -131,6 +143,7 @@ Also add a small canonical `curl` example for `contract-call` that includes:
 - `functionArgs` as a JSON array string,
 - `abi` as a JSON string,
 - the list of accepted `network` values or a link to the supported chains endpoint.
+- clarification on whether numeric EVM chain IDs are generally supported or only work for enabled chains.
 
 ## Current Project Workaround
 

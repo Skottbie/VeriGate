@@ -264,6 +264,41 @@ export async function write0GMemory({
   };
 }
 
+export async function writePassExecutionMemory({
+  policyDraft,
+  executionReceipt,
+  mode = "dry-run",
+  storageAdapter,
+} = {}) {
+  validateEligibilityPolicy(policyDraft);
+  validateExecutionReceipt(executionReceipt);
+  if (mode !== "0g-compute-live") {
+    return {
+      tool: "writePassExecutionMemory",
+      mode: "dry-run-plan",
+      status: "SKIPPED",
+      executionReceipt,
+    };
+  }
+
+  const eventId = policyDraft.policyId;
+  const namespace = createEventMemoryNamespace(eventId);
+  const adapter = storageAdapter ?? create0GStorageAdapter();
+  const pointer = await adapter.uploadJson({
+    eventId,
+    namespace,
+    kind: "pass-execution",
+    object: executionReceipt,
+  });
+
+  return {
+    tool: "writePassExecutionMemory",
+    mode: "0g-storage-live",
+    status: "STORED",
+    pointer,
+  };
+}
+
 export function executePassIssuance({ policyDraft, verificationResult, mode = "dry-run", now = DEFAULT_NOW } = {}) {
   validateEligibilityPolicy(policyDraft);
   validateVerificationResult(verificationResult);
