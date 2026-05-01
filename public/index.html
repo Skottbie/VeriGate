@@ -127,6 +127,21 @@
           </div>
         </section>
 
+        <section class="panel">
+          <div class="panel-heading">
+            <span class="step-index">6</span>
+            <div>
+              <h2>GateAgent iNFT</h2>
+              <p>Mint the event-specific ERC-7857 GateAgent on 0G, then test verifier-checked clone or transfer operations.</p>
+            </div>
+          </div>
+          <div class="controls">
+            <button id="mintGateAgent">Mint GateAgent iNFT</button>
+            <button id="cloneGateAgent" class="secondary">iClone</button>
+            <button id="transferGateAgent" class="secondary">iTransfer</button>
+          </div>
+        </section>
+
         <section class="panel result-panel">
           <div class="result-grid">
             <div>
@@ -153,6 +168,10 @@
               <span class="metric-label">Pass</span>
               <strong id="passMetric">Pending</strong>
             </div>
+            <div>
+              <span class="metric-label">GateAgent</span>
+              <strong id="gateAgentMetric">Pending</strong>
+            </div>
           </div>
         </section>
       </section>
@@ -169,11 +188,13 @@
           <button class="tab" data-panel="proofJson">Proof</button>
           <button class="tab" data-panel="resultJson">Result</button>
           <button class="tab" data-panel="ensJson">ENS</button>
+          <button class="tab" data-panel="gateAgentJson">GateAgent</button>
         </div>
         <pre id="policyJson" class="json-panel active">{}</pre>
         <pre id="proofJson" class="json-panel">{}</pre>
         <pre id="resultJson" class="json-panel">{}</pre>
         <pre id="ensJson" class="json-panel">{}</pre>
+        <pre id="gateAgentJson" class="json-panel">{}</pre>
       </aside>
     </main>
 

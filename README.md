@@ -11,6 +11,7 @@
 - 2026-04-29: P6 Reclaim zkTLS proof path implemented and verified with wallet-control signature checks plus public proof redaction.
 - 2026-04-29: P7 ENS event identity implemented and verified with event subname text records.
 - 2026-04-30: P8 KeeperHub pass issuance implemented and verified with a fresh browser-generated recipient wallet, Sepolia pass minting, and pass execution receipts written back to 0G Storage.
+- 2026-04-30: P9 real ERC-7857 GateAgent iNFT implemented and verified on 0G Galileo with encrypted 0G metadata, mint, iClone, and iTransfer.
 
 ## Local Test Console
 

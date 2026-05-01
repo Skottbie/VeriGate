@@ -1,0 +1,47 @@
+{
+  "ok": true,
+  "network": "0G Galileo",
+  "chainId": 16602,
+  "contracts": {
+    "GateAgentINFT": "0xcD6c201A59F97291dabD45DA1456798D142F9f5e",
+    "GateAgentDataVerifier": "0xEAD5F31be0595C79CE56C25cCb7F39f1c4dF1Bf2"
+  },
+  "minted": {
+    "tokenId": "1",
+    "owner": "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8",
+    "txHash": "0x4e9b60f357a5fb3655e3ec1d4c7259848095fd6c5cc7ade4a7741d37c60fa30f",
+    "explorerUrl": "https://chainscan-galileo.0g.ai/tx/0x4e9b60f357a5fb3655e3ec1d4c7259848095fd6c5cc7ade4a7741d37c60fa30f",
+    "encryptedMetadataURI": "0G://0x2432176e14f3182645ff9fcc4e6502a7c6ec05d3e58ae559abdec9932f29bac4",
+    "metadataRootHash": "0x2432176e14f3182645ff9fcc4e6502a7c6ec05d3e58ae559abdec9932f29bac4",
+    "metadataTxHash": "0x43b46c255d6c4ed321492d0ecab5773c92a00808dac496ccf6f6c765b2e3e493",
+    "dataRoot": "0xfc48322d7306463bb5269b92c41c6286602c2546d9383fa4887c0927d8f7c47c",
+    "authorizedExecutors": [
+      "0xBC4CaCC01E81C7b9258DF424260342D3De72B3d8"
+    ]
+  },
+  "cloned": {
+    "operation": "clone",
+    "tokenId": "1",
+    "newTokenId": "2",
+    "recipient": "0x400AA32b6032820C38927612de3fa3e23A6D8036",
+    "txHash": "0xf80aebe2492af84c4e19dc5805770951edbb2995c1723f8fe2ab3875de8e2690",
+    "explorerUrl": "https://chainscan-galileo.0g.ai/tx/0xf80aebe2492af84c4e19dc5805770951edbb2995c1723f8fe2ab3875de8e2690",
+    "oldDataHash": "0xfc48322d7306463bb5269b92c41c6286602c2546d9383fa4887c0927d8f7c47c",
+    "newDataHash": "0x25b1896296d8178f00b65d44fabd9888ee045fcae87a057aa2b815955adfa798",
+    "encryptedMetadataURI": "0G://0xebfd060e137276a9aa046badd4224b68bb34730d977680c902a99023c7beeb09",
+    "metadataRootHash": "0xebfd060e137276a9aa046badd4224b68bb34730d977680c902a99023c7beeb09",
+    "metadataTxHash": "0xdac8d8d8a9cbb039f9a078bf2475bd26b2d06836d5bf03cc9b983c03c2c3fc4e"
+  },
+  "transferred": {
+    "operation": "transfer",
+    "tokenId": "1",
+    "recipient": "0xb1C9a64E93c3ea8b7275B1894d563bE3565b8CEA",
+    "txHash": "0x0d2957c2deb310d40467d3b2c4b59a027c147e0ba889bd7b48622769d585f6a0",
+    "explorerUrl": "https://chainscan-galileo.0g.ai/tx/0x0d2957c2deb310d40467d3b2c4b59a027c147e0ba889bd7b48622769d585f6a0",
+    "oldDataHash": "0xfc48322d7306463bb5269b92c41c6286602c2546d9383fa4887c0927d8f7c47c",
+    "newDataHash": "0x37b8b9d4b2cd57a24ea4576d1ff7e33ac2c7c862686f1afaab222850aa7137a1",
+    "encryptedMetadataURI": "0G://0x2214807a013d3ef42bf2f49a3f32fd27c8e8ffc76126b61c5a1999cae0deb698",
+    "metadataRootHash": "0x2214807a013d3ef42bf2f49a3f32fd27c8e8ffc76126b61c5a1999cae0deb698",
+    "metadataTxHash": "0xc79771974c00c5a9dc14cc05c14f42a1b7e473a207bdb10b0e9827bb8a256475"
+  }
+}

@@ -7,6 +7,7 @@ const state = {
   memory: null,
   passExecution: null,
   ens: null,
+  gateAgent: null,
   walletAddress: null,
   passWalletAddress: null,
   passWalletPrivateKey: null,
@@ -32,6 +33,9 @@ const els = {
   executePass: document.querySelector("#executePass"),
   publishEns: document.querySelector("#publishEns"),
   resolveEns: document.querySelector("#resolveEns"),
+  mintGateAgent: document.querySelector("#mintGateAgent"),
+  cloneGateAgent: document.querySelector("#cloneGateAgent"),
+  transferGateAgent: document.querySelector("#transferGateAgent"),
   walletState: document.querySelector("#walletState"),
   passWalletState: document.querySelector("#passWalletState"),
   clearLogs: document.querySelector("#clearLogs"),
@@ -40,12 +44,14 @@ const els = {
   proofJson: document.querySelector("#proofJson"),
   resultJson: document.querySelector("#resultJson"),
   ensJson: document.querySelector("#ensJson"),
+  gateAgentJson: document.querySelector("#gateAgentJson"),
   policyMetric: document.querySelector("#policyMetric"),
   proofMetric: document.querySelector("#proofMetric"),
   verifierMetric: document.querySelector("#verifierMetric"),
   executionMetric: document.querySelector("#executionMetric"),
   ensMetric: document.querySelector("#ensMetric"),
   passMetric: document.querySelector("#passMetric"),
+  gateAgentMetric: document.querySelector("#gateAgentMetric"),
 };
 
 boot();
@@ -60,6 +66,9 @@ function boot() {
   els.executePass.addEventListener("click", executePassMint);
   els.publishEns.addEventListener("click", publishEnsIdentity);
   els.resolveEns.addEventListener("click", resolveEnsIdentity);
+  els.mintGateAgent.addEventListener("click", mintGateAgent);
+  els.cloneGateAgent.addEventListener("click", cloneGateAgent);
+  els.transferGateAgent.addEventListener("click", transferGateAgent);
   els.clearLogs.addEventListener("click", () => {
     els.logList.innerHTML = "";
   });
@@ -89,8 +98,9 @@ async function refreshStatus() {
       env.reclaimAppSecret,
       env.ensPublishKey,
       env.keeperHubApiKey,
+      env.gateAgentDeployment,
     ].filter(Boolean).length;
-    els.envStatus.innerHTML = `<span class="${ready === 7 ? "ok" : "warn"}">${ready}/7 live env vars present</span><br>${escapeHtml(status.version ?? "unknown")}`;
+    els.envStatus.innerHTML = `<span class="${ready === 8 ? "ok" : "warn"}">${ready}/8 live env vars present</span><br>${escapeHtml(status.version ?? "unknown")}`;
   } catch (error) {
     els.envStatus.innerHTML = `<span class="bad">${escapeHtml(error.message)}</span>`;
   }
@@ -118,6 +128,7 @@ async function compilePolicy() {
     state.memory = null;
     state.passExecution = null;
     state.ens = null;
+    state.gateAgent = null;
     state.passWalletAddress = null;
     state.passWalletPrivateKey = null;
     state.walletMessage = null;
@@ -136,12 +147,14 @@ async function compilePolicy() {
     setJson(els.proofJson, {});
     setJson(els.resultJson, {});
     setJson(els.ensJson, {});
+    setJson(els.gateAgentJson, {});
     els.policyMetric.textContent = shortHash(result.review.policyHash);
     els.proofMetric.textContent = "Pending";
     els.verifierMetric.textContent = "Pending";
     els.executionMetric.textContent = "Pending";
     els.ensMetric.textContent = "Pending";
     els.passMetric.textContent = "Pending";
+    els.gateAgentMetric.textContent = "Pending";
     els.passWalletState.textContent = "No pass wallet generated";
   });
 }
@@ -354,6 +367,69 @@ async function publishEnsIdentity() {
     writeLogs(result.logs);
     setJson(els.ensJson, result);
     updateEnsMetric(result);
+  });
+}
+
+async function mintGateAgent() {
+  if (!state.policy || !state.memory) {
+    writeLog("gate_agent", "Verify and write live memory before minting a GateAgent iNFT.");
+    return;
+  }
+
+  await withBusy(els.mintGateAgent, async () => {
+    const result = await apiPost("/api/gate-agent/mint", {
+      policy: state.policy,
+      memory: state.memory,
+      passExecution: state.passExecution,
+      ens: state.ens,
+      executorAddress: state.walletAddress,
+    });
+    state.gateAgent = result.result;
+    writeLogs(result.logs);
+    setJson(els.gateAgentJson, state.gateAgent);
+    els.gateAgentMetric.textContent = `Token ${state.gateAgent.tokenId}`;
+    els.gateAgentMetric.className = "ok";
+  });
+}
+
+async function cloneGateAgent() {
+  await mutateGateAgent("clone");
+}
+
+async function transferGateAgent() {
+  await mutateGateAgent("transfer");
+}
+
+async function mutateGateAgent(operation) {
+  if (!state.gateAgent) {
+    writeLog("gate_agent", "Mint a GateAgent iNFT first.");
+    return;
+  }
+  if (!state.passWalletAddress) {
+    await generatePassWallet();
+  }
+  await withBusy(operation === "clone" ? els.cloneGateAgent : els.transferGateAgent, async () => {
+    const result = await apiPost(`/api/gate-agent/${operation}`, {
+      policy: state.policy,
+      memory: state.memory,
+      passExecution: state.passExecution,
+      ens: state.ens,
+      gateAgent: state.gateAgent,
+      recipientAddress: state.passWalletAddress,
+    });
+    writeLogs(result.logs);
+    state.gateAgent = {
+      ...state.gateAgent,
+      lastMutation: result.result,
+    };
+    if (operation === "transfer") {
+      state.gateAgent.owner = result.result.recipient;
+    }
+    setJson(els.gateAgentJson, state.gateAgent);
+    els.gateAgentMetric.textContent = operation === "clone"
+      ? `Cloned ${result.result.newTokenId}`
+      : "Transferred";
+    els.gateAgentMetric.className = "ok";
   });
 }
 
