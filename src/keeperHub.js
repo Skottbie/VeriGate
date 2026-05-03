@@ -4,6 +4,12 @@ import { ethers } from "ethers";
 
 import { canonicalize } from "./canonical.js";
 import { hashPolicy } from "./hash.js";
+import {
+  createJsonRpcProviderForChain,
+  explainRpcError,
+  isRetryableRpcError,
+  retryRpcOperation,
+} from "./rpc.js";
 import { validateEligibilityPolicy, validateVerificationResult } from "./schemas.js";
 
 export const DEFAULT_KEEPERHUB_API_BASE_URL = "https://app.keeperhub.com";
@@ -11,6 +17,9 @@ export const DEFAULT_KEEPERHUB_NETWORK = "sepolia";
 export const DEFAULT_OG_DEPLOYMENT_PATH = "deployments/0g-galileo/addresses.json";
 export const DEFAULT_KEEPERHUB_DEPLOYMENT_PATH = "deployments/sepolia/addresses.json";
 export const KNOWN_UNSUPPORTED_KEEPERHUB_0G_NETWORKS = new Set(["0g-galileo", "16602"]);
+const DEFAULT_KEEPERHUB_FETCH_RETRIES = Number(process.env.KH_FETCH_RETRIES ?? 3);
+const DEFAULT_KEEPERHUB_FETCH_RETRY_INTERVAL_MS = Number(process.env.KH_FETCH_RETRY_INTERVAL_MS ?? 5000);
+const DEFAULT_KEEPERHUB_FETCH_TIMEOUT_MS = Number(process.env.KH_FETCH_TIMEOUT_MS ?? 60000);
 
 export const EVENT_PASS_ABI = [
   "function mintWithVerifiedReceipt(address recipient,bytes32 receiptId,string calldata passTokenURI) external returns (uint256 tokenId)",
@@ -104,6 +113,45 @@ export function buildPassIssuancePlan({
       exactBalanceHidden: true,
       recipientAddressPublic: true,
     },
+  };
+}
+
+export function buildReceiptBinding({
+  plan,
+  executionTxHash,
+  executionNetwork,
+  executionLayer = "KeeperHub",
+  auditNetwork = "0G Galileo",
+} = {}) {
+  if (!plan) {
+    throw new TypeError("plan is required");
+  }
+  const fields = {
+    policyHash: plan.policyHash,
+    proofHash: plan.proofHash,
+    eventNullifier: plan.nullifier,
+    auditPointer: plan.auditURI,
+    receiptId: plan.receiptId,
+    tokenURI: plan.tokenURI,
+    executionTxHash,
+  };
+  const checks = {
+    policyMatched: Boolean(fields.policyHash),
+    proofMatched: Boolean(fields.proofHash),
+    nullifierMatched: Boolean(fields.eventNullifier),
+    auditLinked: Boolean(fields.auditPointer),
+    receiptMatched: Boolean(fields.receiptId),
+    executionLinked: Boolean(fields.executionTxHash),
+  };
+  return {
+    label: "Receipt Binding",
+    status: Object.values(checks).every(Boolean) ? "VERIFIED" : "PENDING",
+    auditLayer: auditNetwork,
+    executionLayer,
+    executionNetwork,
+    bindingHash: ethers.keccak256(ethers.toUtf8Bytes(canonicalize(fields))),
+    fields,
+    checks,
   };
 }
 
@@ -216,6 +264,9 @@ export function createKeeperHubClient({
   baseUrl = process.env.KH_API_BASE_URL ?? DEFAULT_KEEPERHUB_API_BASE_URL,
   network = process.env.KH_NETWORK ?? DEFAULT_KEEPERHUB_NETWORK,
   fetchImpl = fetch,
+  fetchRetries = DEFAULT_KEEPERHUB_FETCH_RETRIES,
+  fetchRetryIntervalMs = DEFAULT_KEEPERHUB_FETCH_RETRY_INTERVAL_MS,
+  fetchTimeoutMs = DEFAULT_KEEPERHUB_FETCH_TIMEOUT_MS,
 } = {}) {
   if (!apiKey) {
     throw new Error("KH_API_KEY is required for KeeperHub live execution");
@@ -235,7 +286,14 @@ export function createKeeperHubClient({
         value,
         gasLimitMultiplier,
       });
-      const response = await fetchImpl(`${baseUrl}/api/execute/contract-call`, {
+      return await keeperHubFetchJson({
+        action: "contract-call",
+        url: `${baseUrl}/api/execute/contract-call`,
+        fetchImpl,
+        retries: fetchRetries,
+        retryIntervalMs: fetchRetryIntervalMs,
+        timeoutMs: fetchTimeoutMs,
+        options: {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -243,28 +301,99 @@ export function createKeeperHubClient({
           "X-API-Key": apiKey,
         },
         body: JSON.stringify(body),
+        },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(formatKeeperHubError("contract-call", payload, response.statusText));
-      }
-      return payload;
     },
     async status(executionId) {
       assertNonEmptyString(executionId, "executionId");
-      const response = await fetchImpl(`${baseUrl}/api/execute/${executionId}/status`, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "X-API-Key": apiKey,
+      return await keeperHubFetchJson({
+        action: "status",
+        url: `${baseUrl}/api/execute/${executionId}/status`,
+        fetchImpl,
+        retries: fetchRetries,
+        retryIntervalMs: fetchRetryIntervalMs,
+        timeoutMs: fetchTimeoutMs,
+        options: {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "X-API-Key": apiKey,
+          },
         },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(formatKeeperHubError("status", payload, response.statusText));
-      }
-      return payload;
     },
   };
+}
+
+async function keeperHubFetchJson({
+  action,
+  url,
+  options,
+  fetchImpl,
+  retries,
+  retryIntervalMs,
+  timeoutMs,
+}) {
+  const attempts = Math.max(1, Number(retries) || 1);
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        return payload;
+      }
+      const error = new Error(formatKeeperHubError(action, payload, response.statusText));
+      error.httpStatus = response.status;
+      if (!isRetryableKeeperHubStatus(response.status) || attempt >= attempts) {
+        throw error;
+      }
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+      if (error?.httpStatus || !isRetryableKeeperHubNetworkError(error) || attempt >= attempts) {
+        throw formatKeeperHubNetworkError(action, error, attempts);
+      }
+    }
+    await delay(retryIntervalMs);
+  }
+  throw formatKeeperHubNetworkError(action, lastError, attempts);
+}
+
+async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
+  const timeout = Math.max(1000, Number(timeoutMs) || DEFAULT_KEEPERHUB_FETCH_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetchImpl(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function isRetryableKeeperHubStatus(status) {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function isRetryableKeeperHubNetworkError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /fetch failed|timeout|aborted|network|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket/i.test(message);
+}
+
+function formatKeeperHubNetworkError(action, error, attempts) {
+  if (error?.httpStatus) {
+    return error;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  const next = new Error(`KeeperHub ${action} network request failed after ${attempts} attempt${attempts === 1 ? "" : "s"}: ${message}`);
+  next.statusCode = 502;
+  return next;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
 export function buildKeeperHubContractCallBody({
@@ -343,6 +472,8 @@ async function executeWithKeeperHub({ plan, deployment, keeperHubClient = create
       txHash,
       transactionLink: status.transactionLink,
       error: status.error ?? result.error,
+      executionNetwork: keeperHubClient.network,
+      executionLayer: "KeeperHub",
     }),
   };
 }
@@ -360,10 +491,12 @@ export function assertKeeperHubNetworkSupportedForDeployment({ network, deployme
 }
 
 async function executeDirectMint({ plan, deployment, rpcUrl, privateKey }) {
-  const { wallet } = createOnchainContext({ rpcUrl, privateKey });
+  const { wallet } = createOnchainContext({ rpcUrl, privateKey, chainId: deployment.chainId });
   const eventPass = new ethers.Contract(deployment.contracts.EventPassSBT, EVENT_PASS_ABI, wallet);
-  const tx = await eventPass.mintWithVerifiedReceipt(plan.recipientAddress, plan.receiptId, plan.tokenURI);
-  const receipt = await tx.wait();
+  const tx = await retryOnchainOperation("mint RSVP pass", async () => (
+    await eventPass.mintWithVerifiedReceipt(plan.recipientAddress, plan.receiptId, plan.tokenURI)
+  ));
+  const receipt = await retryOnchainOperation("wait for RSVP pass mint", async () => await tx.wait());
   const parsed = parsePassMinted(eventPass, receipt);
   return {
     tool: "executePassIssuance",
@@ -385,12 +518,14 @@ async function executeDirectMint({ plan, deployment, rpcUrl, privateKey }) {
       txHash: tx.hash,
       tokenId: parsed?.tokenId,
       blockNumber: receipt.blockNumber,
+      executionNetwork: deployment.network,
+      executionLayer: "Direct onchain",
     }),
   };
 }
 
 async function prepareVerifierReceipt({ plan, deployment, rpcUrl, privateKey }) {
-  const { wallet } = createOnchainContext({ rpcUrl, privateKey });
+  const { wallet } = createOnchainContext({ rpcUrl, privateKey, chainId: deployment.chainId });
   const eventRegistry = new ethers.Contract(deployment.contracts.EventRegistry, EVENT_REGISTRY_ABI, wallet);
   const receiptRegistry = new ethers.Contract(
     deployment.contracts.VerifierReceiptRegistry,
@@ -408,7 +543,9 @@ async function prepareVerifierReceipt({ plan, deployment, rpcUrl, privateKey }) 
 
 async function ensureEvent({ eventRegistry, plan }) {
   try {
-    const existing = await eventRegistry.getFunction("getEvent")(plan.eventId);
+    const existing = await retryOnchainOperation("read gate event", async () => (
+      await eventRegistry.getFunction("getEvent")(plan.eventId)
+    ));
     return validateExistingEvent(existing, plan);
   } catch (error) {
     if (!isContractError(error, "EventDoesNotExist")) {
@@ -417,8 +554,10 @@ async function ensureEvent({ eventRegistry, plan }) {
   }
 
   try {
-    const tx = await eventRegistry.createEvent(plan.eventId, plan.policyHash, plan.auditURI);
-    const receipt = await tx.wait();
+    const tx = await retryOnchainOperation("create gate event", async () => (
+      await eventRegistry.createEvent(plan.eventId, plan.policyHash, plan.auditURI)
+    ));
+    const receipt = await retryOnchainOperation("wait for gate event", async () => await tx.wait());
     return {
       status: "created",
       txHash: tx.hash,
@@ -426,7 +565,9 @@ async function ensureEvent({ eventRegistry, plan }) {
     };
   } catch (error) {
     if (isContractError(error, "EventAlreadyExists")) {
-      const existing = await eventRegistry.getFunction("getEvent")(plan.eventId);
+      const existing = await retryOnchainOperation("read existing gate event", async () => (
+        await eventRegistry.getFunction("getEvent")(plan.eventId)
+      ));
       return validateExistingEvent(existing, plan);
     }
     throw explainContractError(error, "failed to create gate event");
@@ -435,7 +576,9 @@ async function ensureEvent({ eventRegistry, plan }) {
 
 async function ensureReceipt({ receiptRegistry, plan, verifier }) {
   try {
-    const existing = await receiptRegistry.getFunction("getReceipt")(plan.receiptId);
+    const existing = await retryOnchainOperation("read verifier receipt", async () => (
+      await receiptRegistry.getFunction("getReceipt")(plan.receiptId)
+    ));
     return {
       status: "already_exists",
       receiptId: existing.receiptId,
@@ -447,7 +590,7 @@ async function ensureReceipt({ receiptRegistry, plan, verifier }) {
   }
 
   try {
-    const tx = await receiptRegistry.recordReceipt({
+    const tx = await retryOnchainOperation("record verifier receipt", async () => await receiptRegistry.recordReceipt({
       receiptId: plan.receiptId,
       eventId: plan.eventId,
       policyHash: plan.policyHash,
@@ -457,8 +600,8 @@ async function ensureReceipt({ receiptRegistry, plan, verifier }) {
       expiresAt: plan.expiresAt,
       verifier,
       auditURI: plan.auditURI,
-    });
-    const receipt = await tx.wait();
+    }));
+    const receipt = await retryOnchainOperation("wait for verifier receipt", async () => await tx.wait());
     return {
       status: "recorded",
       txHash: tx.hash,
@@ -466,7 +609,9 @@ async function ensureReceipt({ receiptRegistry, plan, verifier }) {
     };
   } catch (error) {
     if (isContractError(error, "ReceiptAlreadyExists")) {
-      const existing = await receiptRegistry.getFunction("getReceipt")(plan.receiptId);
+      const existing = await retryOnchainOperation("read existing verifier receipt", async () => (
+        await receiptRegistry.getFunction("getReceipt")(plan.receiptId)
+      ));
       return {
         status: "already_exists",
         receiptId: existing.receiptId,
@@ -508,11 +653,22 @@ function errorSelector(name) {
 }
 
 function explainContractError(error, prefix) {
+  if (isRetryableRpcError(error)) {
+    return explainRpcError(error, prefix);
+  }
   const known = error?.revert?.name ?? error?.errorName ?? error?.info?.errorName;
   if (known) {
     return new Error(`${prefix}: ${known}`);
   }
   return new Error(`${prefix}: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+async function retryOnchainOperation(action, operation) {
+  try {
+    return await retryRpcOperation(operation);
+  } catch (error) {
+    throw explainContractError(error, action);
+  }
 }
 
 function buildExecutionReceipt({
@@ -522,11 +678,19 @@ function buildExecutionReceipt({
   status,
   txHash,
   transactionLink,
-  error,
-  tokenId,
-  blockNumber,
-  now = new Date(),
+    error,
+    tokenId,
+    blockNumber,
+    executionNetwork,
+    executionLayer,
+    now = new Date(),
 }) {
+  const receiptBinding = buildReceiptBinding({
+    plan,
+    executionTxHash: txHash,
+    executionNetwork,
+    executionLayer,
+  });
   return {
     executor,
     action: "mint_rsvp_pass",
@@ -543,6 +707,7 @@ function buildExecutionReceipt({
     tokenId: tokenId?.toString?.() ?? tokenId,
     blockNumber,
     recipientPrivacy: plan.recipientPrivacy,
+    receiptBinding,
   };
 }
 
@@ -556,14 +721,14 @@ async function readDeployment(path) {
   return deployment;
 }
 
-function createOnchainContext({ rpcUrl = process.env.OG_RPC_URL, privateKey = process.env.OG_PRIVATE_KEY } = {}) {
+function createOnchainContext({ rpcUrl = process.env.OG_RPC_URL, privateKey = process.env.OG_PRIVATE_KEY, chainId } = {}) {
   if (!rpcUrl) {
     throw new Error("OG_RPC_URL is required for direct pass issuance");
   }
   if (!privateKey) {
     throw new Error("OG_PRIVATE_KEY is required for direct pass issuance");
   }
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const provider = createJsonRpcProviderForChain(rpcUrl, chainId);
   const wallet = new ethers.Wallet(privateKey, provider);
   return { provider, wallet };
 }

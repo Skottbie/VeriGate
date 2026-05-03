@@ -5,6 +5,7 @@ import {
   assertKeeperHubNetworkSupportedForDeployment,
   buildPassIssuancePlan,
   buildKeeperHubContractCallBody,
+  buildReceiptBinding,
   createKeeperHubClient,
   deriveChainEventId,
   executePassIssuanceOnchain,
@@ -161,6 +162,50 @@ test("dry-run pass execution produces a KeeperHub-shaped execution receipt", asy
   assert.equal(result.executionReceipt.executor, "KeeperHub");
   assert.equal(result.executionReceipt.status, "READY_FOR_MINT");
   assert.equal(result.executionReceipt.recipient, FRESH_WALLET);
+  assert.equal(result.executionReceipt.receiptBinding.status, "VERIFIED");
+  assert.equal(result.executionReceipt.receiptBinding.auditLayer, "0G Galileo");
+  assert.equal(result.executionReceipt.receiptBinding.executionLayer, "KeeperHub");
+  assert.equal(result.executionReceipt.receiptBinding.checks.policyMatched, true);
+  assert.equal(result.executionReceipt.receiptBinding.checks.executionLinked, true);
+  assert.match(result.executionReceipt.receiptBinding.bindingHash, /^0x[0-9a-f]{64}$/);
+});
+
+test("receipt binding links canonical audit fields to the execution receipt", () => {
+  const policy = fixturePolicy();
+  const proof = fixtureProof(policy);
+  const plan = buildPassIssuancePlan({
+    policy,
+    applicantProof: proof,
+    verificationResult: fixtureVerification(policy, proof),
+    recipientAddress: FRESH_WALLET,
+    sourceWalletAddress: SOURCE_WALLET,
+    memory: {
+      manifestPointer: {
+        rootHash: "0xa78f7dd5bd786730e3f3e8427e5cc68ac3451acb87955e04ae8e6800d13bd772",
+      },
+    },
+  });
+  const binding = buildReceiptBinding({
+    plan,
+    executionTxHash: "0x" + "33".repeat(32),
+    executionNetwork: "sepolia",
+    executionLayer: "KeeperHub",
+  });
+
+  assert.equal(binding.label, "Receipt Binding");
+  assert.equal(binding.status, "VERIFIED");
+  assert.equal(binding.auditLayer, "0G Galileo");
+  assert.equal(binding.executionLayer, "KeeperHub");
+  assert.equal(binding.executionNetwork, "sepolia");
+  assert.equal(binding.fields.policyHash, plan.policyHash);
+  assert.equal(binding.fields.proofHash, plan.proofHash);
+  assert.equal(binding.fields.eventNullifier, plan.nullifier);
+  assert.equal(binding.fields.auditPointer, plan.auditURI);
+  assert.equal(binding.fields.receiptId, plan.receiptId);
+  assert.equal(binding.fields.executionTxHash, "0x" + "33".repeat(32));
+  assert.equal(binding.checks.auditLinked, true);
+  assert.equal(binding.checks.executionLinked, true);
+  assert.match(binding.bindingHash, /^0x[0-9a-f]{64}$/);
 });
 
 test("KeeperHub client sends contract-call payload without exposing local secrets", async () => {

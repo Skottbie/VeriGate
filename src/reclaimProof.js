@@ -8,6 +8,17 @@ import { validateApplicantProof, validateEligibilityPolicy } from "./schemas.js"
 
 const require = createRequire(import.meta.url);
 const DEFAULT_ETH_RPC_URL = "https://ethereum-rpc.publicnode.com";
+const RECLAIM_ZKFETCH_RETRIES = Number(process.env.RECLAIM_ZKFETCH_RETRIES ?? 3);
+const RECLAIM_ZKFETCH_RETRY_INTERVAL_MS = Number(process.env.RECLAIM_ZKFETCH_RETRY_INTERVAL_MS ?? 5000);
+const RECLAIM_LOGS_BACKEND = "https://logs.reclaimprotocol.org";
+const RECLAIM_API_BACKEND = "https://api.reclaimprotocol.org";
+const RECLAIM_APP_LOOKUP_BACKEND = `${RECLAIM_API_BACKEND}/api/applications/sdk/get-zk-enabled-app/`;
+const RECLAIM_ATTESTOR_FEATURE_FLAG_URL =
+  `${RECLAIM_API_BACKEND}/api/feature-flags/get?featureFlagNames=zkFetchAttestorURL`;
+const RECLAIM_ATTESTOR_DISCOVERY_TIMEOUT_MS = Number(process.env.RECLAIM_ATTESTOR_DISCOVERY_TIMEOUT_MS ?? 15000);
+const RECLAIM_ATTESTOR_DISCOVERY_RETRIES = Number(process.env.RECLAIM_ATTESTOR_DISCOVERY_RETRIES ?? 2);
+const RECLAIM_ATTESTOR_DISCOVERY_RETRY_INTERVAL_MS =
+  Number(process.env.RECLAIM_ATTESTOR_DISCOVERY_RETRY_INTERVAL_MS ?? 2000);
 const REQUIRED_RECLAIM_RESOURCE_FILES = [
   "resources/snarkjs/chacha20/circuit.wasm",
   "resources/snarkjs/chacha20/circuit_final.zkey",
@@ -185,6 +196,7 @@ export async function requestReclaimEthHolderProof({
   now = new Date(),
   reclaimClient,
   ethRpcUrl,
+  includeRawProof = false,
 } = {}) {
   validateEligibilityPolicy(policy);
   verifyWalletControlSignature({
@@ -194,20 +206,20 @@ export async function requestReclaimEthHolderProof({
   });
 
   if (expiresAt && new Date(expiresAt).getTime() <= new Date(now).getTime()) {
-    throw new Error("proof request is expired before zkTLS generation");
+    const error = new Error("proof request is expired before zkTLS generation; sign a fresh wallet-control message");
+    error.statusCode = 400;
+    throw error;
   }
 
+  const liveClient = !reclaimClient;
+  const attestorUrl = liveClient ? await discoverReclaimAttestorUrl() : null;
   const client = reclaimClient ?? await createReclaimClient();
   const request = createReclaimEthBalanceRequest({ walletAddress, ethRpcUrl });
-  const zkResponse = await client.zkFetch(
-    request.url,
-    request.publicOptions,
-    request.privateOptions,
-  );
+  const zkResponse = await runReclaimZkFetch(client, request, { attestorUrl });
 
   const balanceHex = extractBalanceHex(zkResponse);
   const qualified = BigInt(balanceHex) > 0n;
-  return buildApplicantProofFromReclaim({
+  const result = buildApplicantProofFromReclaim({
     policy,
     walletAddress,
     applicantSecret,
@@ -215,6 +227,121 @@ export async function requestReclaimEthHolderProof({
     qualified,
     reclaimProof: zkResponse,
   });
+  if (includeRawProof) {
+    return {
+      ...result,
+      rawReclaimProof: zkResponse,
+    };
+  }
+  return result;
+}
+
+async function runReclaimZkFetch(client, request, { attestorUrl } = {}) {
+  return await withReclaimSdkNetworkShim(async () => await client.zkFetch(
+    request.url,
+    request.publicOptions,
+    request.privateOptions,
+    RECLAIM_ZKFETCH_RETRIES,
+    RECLAIM_ZKFETCH_RETRY_INTERVAL_MS,
+  ), { attestorUrl });
+}
+
+async function discoverReclaimAttestorUrl({
+  fetchImpl = globalThis.fetch,
+  configuredAttestorUrl = process.env.RECLAIM_ATTESTOR_URL,
+} = {}) {
+  if (configuredAttestorUrl) {
+    assertNonEmptyString(configuredAttestorUrl, "RECLAIM_ATTESTOR_URL");
+    return configuredAttestorUrl;
+  }
+  if (typeof fetchImpl !== "function") {
+    throw reclaimAttestorDiscoveryError("fetch implementation is unavailable");
+  }
+
+  let lastError = null;
+  const attempts = Math.max(1, Number(RECLAIM_ATTESTOR_DISCOVERY_RETRIES) || 1);
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(fetchImpl, RECLAIM_ATTESTOR_FEATURE_FLAG_URL, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      }, RECLAIM_ATTESTOR_DISCOVERY_TIMEOUT_MS);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const flags = await response.json();
+      const attestorFlag = Array.isArray(flags)
+        ? flags.find((flag) => flag?.name === "zkFetchAttestorURL")
+        : null;
+      if (!attestorFlag?.value || typeof attestorFlag.value !== "string") {
+        throw new Error("zkFetchAttestorURL feature flag is missing");
+      }
+      return attestorFlag.value;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await delay(RECLAIM_ATTESTOR_DISCOVERY_RETRY_INTERVAL_MS);
+      }
+    }
+  }
+  throw reclaimAttestorDiscoveryError(lastError instanceof Error ? lastError.message : String(lastError));
+}
+
+async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 1000));
+  try {
+    return await fetchImpl(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function reclaimAttestorDiscoveryError(reason) {
+  const error = new Error(`RECLAIM_ATTESTOR_DISCOVERY_FAILED: ${reason}`);
+  error.statusCode = 502;
+  return error;
+}
+
+async function withReclaimSdkNetworkShim(operation, { attestorUrl } = {}) {
+  if (typeof globalThis.fetch !== "function" || typeof Response !== "function") {
+    return await operation();
+  }
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input?.url;
+    if (typeof url === "string" && url.startsWith(RECLAIM_LOGS_BACKEND)) {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (typeof url === "string" && url.startsWith(RECLAIM_APP_LOOKUP_BACKEND)) {
+      return new Response(JSON.stringify({ application: { name: "VeriGate" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (attestorUrl && typeof url === "string" && url.startsWith(RECLAIM_ATTESTOR_FEATURE_FLAG_URL)) {
+      return new Response(JSON.stringify([{ name: "zkFetchAttestorURL", value: attestorUrl }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return await originalFetch(input, init);
+  };
+  try {
+    return await operation();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
 export function buildApplicantProofFromReclaim({
@@ -287,6 +414,97 @@ export function buildPublicReclaimProofMeta(reclaimProof) {
   };
   assertPublicProofSafe(publicMeta);
   return publicMeta;
+}
+
+export async function verifyReclaimProofBinding({
+  applicantProof,
+  publicProofMeta,
+  rawReclaimProof,
+  moduleLoader = () => import("@reclaimprotocol/js-sdk"),
+} = {}) {
+  validateApplicantProof(applicantProof);
+  if (!publicProofMeta || publicProofMeta.proofType !== "reclaim_zkfetch") {
+    throw new Error("INVALID_RECLAIM_PROOF");
+  }
+  if (!rawReclaimProof) {
+    throw new Error("RECLAIM_PROOF_NOT_FOUND");
+  }
+
+  const expectedProofSha = buildPublicReclaimProofMeta(rawReclaimProof).proofSha256;
+  if (publicProofMeta.proofSha256 !== expectedProofSha) {
+    throw new Error("INVALID_RECLAIM_PROOF");
+  }
+
+  const module = await moduleLoader();
+  const verifyProof = module.verifyProof ?? module.default?.verifyProof;
+  if (typeof verifyProof !== "function") {
+    throw new Error("INVALID_RECLAIM_PROOF");
+  }
+
+  const verificationConfig = buildReclaimVerificationConfig(rawReclaimProof, module);
+  const verification = await verifyProof(rawReclaimProof, verificationConfig);
+  const verified = verification === true || verification?.isVerified === true;
+  if (!verified) {
+    throw new Error("INVALID_RECLAIM_PROOF");
+  }
+
+  const balanceHex = extractBalanceHex(rawReclaimProof);
+  const derivedExposureTier = BigInt(balanceHex) > 0n ? "qualified" : "not_qualified";
+  if (applicantProof.claims.aggregatedExposureTier !== derivedExposureTier) {
+    throw new Error("RECLAIM_TIER_MISMATCH");
+  }
+
+  return {
+    provider: "Reclaim",
+    proofType: publicProofMeta.proofType,
+    proofSha256: publicProofMeta.proofSha256,
+    identifier: publicProofMeta.identifier,
+    witnessCount: Array.isArray(publicProofMeta.witnesses) ? publicProofMeta.witnesses.length : 0,
+    signatureCount: Array.isArray(publicProofMeta.signatures) ? publicProofMeta.signatures.length : 0,
+    serverVerified: true,
+    claimSource: "server_verified_zktls",
+    verificationConfig: verificationConfig.dangerouslyDisableContentValidation ? "signature_only" : "hash_bound",
+    derivedExposureTier,
+    rawProof: "withheld",
+  };
+}
+
+function buildReclaimVerificationConfig(rawReclaimProof, module) {
+  const getHttpProviderClaimParamsFromProof = module.getHttpProviderClaimParamsFromProof
+    ?? module.default?.getHttpProviderClaimParamsFromProof;
+  const hashProofClaimParams = module.hashProofClaimParams ?? module.default?.hashProofClaimParams;
+  if (typeof getHttpProviderClaimParamsFromProof === "function" && typeof hashProofClaimParams === "function") {
+    try {
+      const claimParams = getHttpProviderClaimParamsFromProof(rawReclaimProof);
+      const hashes = hashProofClaimParams(claimParams);
+      return {
+        hashes: Array.isArray(hashes) ? hashes : [hashes],
+      };
+    } catch {
+      // Some zkFetch proof shapes do not expose HTTP provider params in the
+      // SDK's hash helper format. Keep witness signature verification active.
+    }
+  }
+  return {
+    dangerouslyDisableContentValidation: true,
+  };
+}
+
+export function buildFixtureReclaimVerification({ applicantProof, publicProofMeta } = {}) {
+  validateApplicantProof(applicantProof);
+  return {
+    provider: "Reclaim",
+    proofType: publicProofMeta?.proofType ?? "reclaim_zkfetch",
+    proofSha256: publicProofMeta?.proofSha256,
+    identifier: publicProofMeta?.identifier,
+    witnessCount: Array.isArray(publicProofMeta?.witnesses) ? publicProofMeta.witnesses.length : 0,
+    signatureCount: Array.isArray(publicProofMeta?.signatures) ? publicProofMeta.signatures.length : 0,
+    serverVerified: false,
+    mode: "fixture",
+    claimSource: "fixture_zktls_shape",
+    derivedExposureTier: applicantProof.claims.aggregatedExposureTier,
+    rawProof: "withheld",
+  };
 }
 
 export function assertPublicProofSafe(value, { forbiddenValues = [] } = {}) {

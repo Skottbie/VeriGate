@@ -191,8 +191,8 @@ export function requestApplicantProof({
   };
 }
 
-export function verifyApplicantProof({ policyDraft, applicantProof, now = DEFAULT_NOW } = {}) {
-  const result = verifyProof(policyDraft, applicantProof, { now });
+export function verifyApplicantProof({ policyDraft, applicantProof, now = DEFAULT_NOW, usedNullifiers } = {}) {
+  const result = verifyProof(policyDraft, applicantProof, { now, usedNullifiers });
   validateVerificationResult(result);
   return {
     tool: "verifyProof",
@@ -442,6 +442,19 @@ async function writeLive0GMemory({
   validateExecutionReceipt(executionReceipt);
   const eventId = policyDraft.policyId;
   const namespace = createEventMemoryNamespace(eventId);
+  if (process.env.OG_STORAGE_MEMORY_LAYOUT !== "expanded") {
+    return writeCompactLive0GMemory({
+      policyDraft,
+      computeReceipt,
+      auditRecord,
+      publicProofMeta,
+      executionReceipt,
+      storageAdapter,
+      eventId,
+      namespace,
+    });
+  }
+
   const pointers = {};
 
   pointers.policy = await storageAdapter.uploadJson({
@@ -518,6 +531,92 @@ async function writeLive0GMemory({
     mode: "0g-storage-live",
     namespace,
     auditRecord: liveAuditRecord,
+    pointers,
+    manifestPointer: pointers.manifest,
+  };
+}
+
+async function writeCompactLive0GMemory({
+  policyDraft,
+  computeReceipt,
+  auditRecord,
+  publicProofMeta,
+  executionReceipt,
+  storageAdapter,
+  eventId,
+  namespace,
+}) {
+  const liveAuditRecord = validateAuditRecord({
+    ...auditRecord,
+    proofMetadata: publicProofMeta
+      ? {
+          provider: "Reclaim",
+          proofType: publicProofMeta.proofType,
+          proofSha256: publicProofMeta.proofSha256,
+          identifier: publicProofMeta.identifier,
+          pointer: "0G://workflow-bundle/proof-metadata",
+        }
+      : auditRecord.proofMetadata,
+    storage: {
+      provider: "0G",
+      pointer: "0G://workflow-bundle/compute-receipts",
+    },
+  });
+
+  const bundle = {
+    eventId,
+    namespace,
+    schemaVersion: 1,
+    layout: "compact-workflow-bundle",
+    policy: policyDraft,
+    computeReceipt,
+    proofMetadata: publicProofMeta,
+    auditRecord: liveAuditRecord,
+    executionReceipt,
+  };
+
+  const bundlePointer = await storageAdapter.uploadJson({
+    eventId,
+    namespace,
+    kind: "workflow-bundle",
+    object: bundle,
+  });
+
+  const pointer = {
+    ...bundlePointer,
+    bundled: true,
+  };
+  const pointers = {
+    policy: { ...pointer, kind: "workflow-bundle:policy" },
+    "compute-receipts": { ...pointer, kind: "workflow-bundle:compute-receipts" },
+    audit: { ...pointer, kind: "workflow-bundle:audit" },
+    execution: { ...pointer, kind: "workflow-bundle:execution" },
+    manifest: { ...pointer, kind: "workflow-bundle:manifest" },
+  };
+  if (publicProofMeta) {
+    pointers["proof-metadata"] = { ...pointer, kind: "workflow-bundle:proof-metadata" };
+  }
+
+  const finalAuditRecord = validateAuditRecord({
+    ...liveAuditRecord,
+    proofMetadata: publicProofMeta
+      ? {
+          ...liveAuditRecord.proofMetadata,
+          pointer: `0G://${bundlePointer.rootHash}`,
+        }
+      : liveAuditRecord.proofMetadata,
+    storage: {
+      provider: "0G",
+      pointer: `0G://${bundlePointer.rootHash}`,
+    },
+  });
+
+  return {
+    tool: "write0GMemory",
+    mode: "0g-storage-live",
+    layout: "compact-workflow-bundle",
+    namespace,
+    auditRecord: finalAuditRecord,
     pointers,
     manifestPointer: pointers.manifest,
   };

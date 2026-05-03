@@ -17,6 +17,7 @@ import {
 } from "./agent/tools.js";
 import {
   assertPublicProofSafe,
+  buildFixtureReclaimVerification,
   buildWalletControlMessage,
   buildEnsIdentityPayload,
   buildGateAgentIntelligentData,
@@ -31,9 +32,11 @@ import {
   publishEnsTextRecords,
   rootFromPointer,
   requestReclaimEthHolderProof,
+  verifyReclaimProofBinding,
   validateEnsRecordAlignment,
 } from "../src/index.js";
 import { create0GStorageAdapter, createEventMemoryNamespace } from "../src/ogStorage.js";
+import { create0GJsonRpcProvider } from "../src/rpc.js";
 
 dotenv.config({ quiet: true });
 
@@ -42,7 +45,10 @@ const PUBLIC_ROOT = join(ROOT, "public");
 const VENDOR_ROOT = join(ROOT, "node_modules");
 const PORT = Number(process.env.VERIGATE_WEB_PORT ?? 4173);
 const MAX_BODY_BYTES = 1024 * 1024;
-const APP_VERSION = "p9-real-erc7857-gate-agent";
+const APP_VERSION = "p10-verigate-rsvp-studio";
+const usedNullifiersByPolicy = new Set();
+const RECLAIM_PROOF_SESSION_TTL_MS = 15 * 60 * 1000;
+const reclaimProofSessions = new Map();
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -59,7 +65,7 @@ const server = createServer(async (request, response) => {
     }
     await serveStatic(request, response);
   } catch (error) {
-    sendJson(response, 500, {
+    sendJson(response, error.statusCode ?? 500, {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -271,7 +277,9 @@ async function handleApi(request, response) {
         walletMessage: body.walletMessage,
         applicantSecret,
         expiresAt: body.expiresAt,
+        includeRawProof: true,
       });
+      rememberReclaimProofSession(result);
     } else {
       const balanceHex = proofMode === "fixture-rejected" ? "0x0" : "0x1";
       result = await requestReclaimEthHolderProof({
@@ -315,11 +323,25 @@ async function handleApi(request, response) {
   if (request.method === "POST" && url.pathname === "/api/verify") {
     const body = await readJson(request);
     const now = body.now ?? new Date().toISOString();
+    const policyHash = hashPolicy(body.policy);
+    const eventNullifier = body.applicantProof?.antiSybil?.eventNullifier;
+    const nullifierKey = eventNullifier ? `${policyHash}:${eventNullifier}` : null;
+    const attestation = await verifyReclaimForRequest({
+      applicantProof: body.applicantProof,
+      publicProofMeta: body.publicProofMeta,
+    });
     const verification = verifyApplicantProof({
       policyDraft: body.policy,
       applicantProof: body.applicantProof,
       now,
+      usedNullifiers: nullifierKey
+        ? { has: (candidate) => usedNullifiersByPolicy.has(`${policyHash}:${candidate}`) }
+        : undefined,
     });
+    verification.attestation = attestation;
+    if (verification.result.approved && nullifierKey) {
+      usedNullifiersByPolicy.add(nullifierKey);
+    }
     const memoryMode = body.memoryMode === "0g-storage-live" ? "0g-compute-live" : "dry-run";
     const execution = executePassIssuance({
       policyDraft: body.policy,
@@ -375,6 +397,12 @@ async function handleApi(request, response) {
       ok: true,
       logs: [
         logEntry("deterministic_verifier", `Verifier returned ${verification.result.reasonCode}.`),
+        logEntry(
+          "reclaim_attestation",
+          attestation.serverVerified
+            ? "Reclaim zkTLS proof verified server-side; raw proof withheld."
+            : "Fixture zkTLS proof shape accepted for local testing; raw proof withheld.",
+        ),
         logEntry("execution", `KeeperHub execution status: ${execution.executionReceipt.status}.`),
         memoryUploadError
           ? logEntry("0g_storage_memory_failed", memoryUploadError)
@@ -550,6 +578,63 @@ function logEntry(step, message) {
     step,
     message,
   };
+}
+
+function rememberReclaimProofSession(result) {
+  if (!result?.rawReclaimProof || !result?.publicProofMeta?.proofSha256) {
+    return;
+  }
+  pruneReclaimProofSessions();
+  reclaimProofSessions.set(result.publicProofMeta.proofSha256, {
+    rawReclaimProof: result.rawReclaimProof,
+    expiresAtMs: Date.now() + RECLAIM_PROOF_SESSION_TTL_MS,
+  });
+  delete result.rawReclaimProof;
+}
+
+async function verifyReclaimForRequest({ applicantProof, publicProofMeta } = {}) {
+  pruneReclaimProofSessions();
+  if (isFixtureReclaimProof(publicProofMeta)) {
+    return buildFixtureReclaimVerification({ applicantProof, publicProofMeta });
+  }
+  const proofSha = publicProofMeta?.proofSha256;
+  const session = proofSha ? reclaimProofSessions.get(proofSha) : null;
+  try {
+    return await verifyReclaimProofBinding({
+      applicantProof,
+      publicProofMeta,
+      rawReclaimProof: session?.rawReclaimProof,
+    });
+  } catch (error) {
+    const code = normalizeReclaimVerificationError(error);
+    const err = new Error(code);
+    err.statusCode = 400;
+    throw err;
+  }
+}
+
+function pruneReclaimProofSessions(now = Date.now()) {
+  for (const [key, session] of reclaimProofSessions) {
+    if (!session || session.expiresAtMs <= now) {
+      reclaimProofSessions.delete(key);
+    }
+  }
+}
+
+function isFixtureReclaimProof(publicProofMeta) {
+  return publicProofMeta?.identifier === "reclaim-proof-fixture"
+    || publicProofMeta?.signatures?.includes?.("fixture-signature-redacted");
+}
+
+function normalizeReclaimVerificationError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("RECLAIM_PROOF_NOT_FOUND")) {
+    return "RECLAIM_PROOF_NOT_FOUND";
+  }
+  if (message.includes("RECLAIM_TIER_MISMATCH")) {
+    return "RECLAIM_TIER_MISMATCH";
+  }
+  return "INVALID_RECLAIM_PROOF";
 }
 
 function formatStorageError(error) {
@@ -793,7 +878,7 @@ async function createGateAgentContext() {
   if (!process.env.OG_RPC_URL || !process.env.OG_PRIVATE_KEY) {
     throw new Error("OG_RPC_URL and OG_PRIVATE_KEY are required for GateAgent iNFT execution");
   }
-  const provider = new ethers.JsonRpcProvider(process.env.OG_RPC_URL);
+  const provider = create0GJsonRpcProvider(process.env.OG_RPC_URL);
   const wallet = new ethers.Wallet(process.env.OG_PRIVATE_KEY, provider);
   const contract = new ethers.Contract(deployment.contracts.GateAgentINFT, GATE_AGENT_INFT_ABI, wallet);
   return { deployment, provider, wallet, contract };

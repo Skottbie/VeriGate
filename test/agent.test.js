@@ -5,6 +5,7 @@ import {
   createPolicyFromIntentWith0GCompute,
   runVeriGateDryRun,
   summarizeDryRun,
+  verifyApplicantProof,
 } from "../scripts/agent/tools.js";
 
 test("verigate agent dry-run follows the required P5 tool sequence", async () => {
@@ -46,6 +47,19 @@ test("verigate agent dry-run accepts a natural-language organizer intent", async
   assert.equal(result.verification.result.reasonCode, "POLICY_SATISFIED");
 });
 
+test("verigate verifier rejects a reused event nullifier", async () => {
+  const result = await runVeriGateDryRun();
+  const nullifier = result.proofRequest.proof.antiSybil.eventNullifier;
+  const verification = verifyApplicantProof({
+    policyDraft: result.compute.policyDraft,
+    applicantProof: result.proofRequest.proof,
+    usedNullifiers: new Set([nullifier]),
+  });
+
+  assert.equal(verification.result.approved, false);
+  assert.equal(verification.result.reasonCode, "DUPLICATE_NULLIFIER");
+});
+
 test("live workflow memory writer uploads policy, compute, audit, execution, and manifest", async () => {
   const uploads = [];
   const result = await runVeriGateDryRun();
@@ -68,14 +82,14 @@ test("live workflow memory writer uploads policy, compute, audit, execution, and
     },
   }));
 
-  assert.deepEqual(uploads.map((upload) => upload.kind), [
-    "policy",
-    "compute-receipts",
-    "audit",
-    "execution",
-    "manifest",
-  ]);
+  assert.deepEqual(uploads.map((upload) => upload.kind), ["workflow-bundle"]);
+  assert.equal(uploads[0].object.layout, "compact-workflow-bundle");
+  assert.equal(uploads[0].object.policy.policyId, result.compute.policyDraft.policyId);
+  assert.equal(uploads[0].object.auditRecord.eventId, result.compute.policyDraft.policyId);
+  assert.equal(uploads[0].object.executionReceipt.status, result.execution.executionReceipt.status);
   assert.equal(liveMemory.mode, "0g-storage-live");
+  assert.equal(liveMemory.layout, "compact-workflow-bundle");
+  assert.equal(liveMemory.manifestPointer.bundled, true);
   assert.match(liveMemory.manifestPointer.rootHash, /^0x/);
 });
 
@@ -112,19 +126,14 @@ test("live workflow memory writer stores public Reclaim proof metadata", async (
     },
   }));
 
-  assert.deepEqual(uploads.map((upload) => upload.kind), [
-    "policy",
-    "compute-receipts",
-    "proof-metadata",
-    "audit",
-    "execution",
-    "manifest",
-  ]);
-  assert.deepEqual(uploads.find((upload) => upload.kind === "proof-metadata").object, publicProofMeta);
+  assert.deepEqual(uploads.map((upload) => upload.kind), ["workflow-bundle"]);
+  assert.equal(uploads[0].object.layout, "compact-workflow-bundle");
+  assert.deepEqual(uploads[0].object.proofMetadata, publicProofMeta);
   assert.equal(liveMemory.auditRecord.proofMetadata.provider, "Reclaim");
   assert.equal(liveMemory.auditRecord.proofMetadata.proofSha256, publicProofMeta.proofSha256);
   assert.match(liveMemory.auditRecord.proofMetadata.pointer, /^0G:\/\//);
   assert.match(liveMemory.pointers["proof-metadata"].rootHash, /^0x/);
+  assert.equal(liveMemory.pointers["proof-metadata"].bundled, true);
 });
 
 test("0G Compute policy compiler path calls the live adapter without fallback", async () => {

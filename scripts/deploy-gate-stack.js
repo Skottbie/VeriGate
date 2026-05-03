@@ -33,7 +33,7 @@ if (deployer === undefined) {
   throw new Error(`No deployer signer found for ${targetName}.`);
 }
 
-console.log(`Deploying VeriAgent Mesh gate contracts to ${target.networkName}`);
+console.log(`Deploying VeriGate gate contracts to ${target.networkName}`);
 console.log("Deployer:", deployer.address);
 
 const eventRegistry = await ethers.deployContract("EventRegistry");

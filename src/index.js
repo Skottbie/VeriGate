@@ -41,6 +41,7 @@ export {
   assertReclaimResourcesReady,
   buildApplicantProofFromReclaim,
   buildPublicReclaimProofMeta,
+  buildFixtureReclaimVerification,
   buildWalletControlMessage,
   createApplicantCommitment,
   createReclaimClient,
@@ -48,6 +49,7 @@ export {
   createWalletCommitment,
   extractBalanceHex,
   requestReclaimEthHolderProof,
+  verifyReclaimProofBinding,
   verifyWalletControlSignature
 } from "./reclaimProof.js";
 
@@ -57,6 +59,7 @@ export {
   DEFAULT_KEEPERHUB_NETWORK,
   EVENT_PASS_ABI,
   EVENT_PASS_KEEPERHUB_ABI,
+  buildReceiptBinding,
   assertKeeperHubNetworkSupportedForDeployment,
   buildPassIssuancePlan,
   buildKeeperHubContractCallBody,

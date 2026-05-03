@@ -3,202 +3,410 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>VeriGate Test Console</title>
+    <title>VeriGate RSVP</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <main class="shell">
-      <section class="workspace">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">VeriAgent Mesh</p>
-            <h1>VeriGate Test Console</h1>
-          </div>
-          <div class="status" id="envStatus">Checking environment...</div>
-        </header>
+    <div class="bg-orbs" aria-hidden="true">
+      <div class="orb orb-coral"></div>
+      <div class="orb orb-blue"></div>
+      <div class="orb orb-violet"></div>
+      <div class="orb orb-amber"></div>
+    </div>
+    <section id="introDeck" class="intro-deck" aria-label="VeriGate demo intro">
 
-        <section class="panel">
-          <div class="panel-heading">
-            <span class="step-index">1</span>
-            <div>
-              <h2>Organizer Intent</h2>
-              <p>Compile a private ETH holder gate into a structured policy using your connected wallet as organizer.</p>
-            </div>
+      <article class="intro-slide active" data-intro-slide="0">
+        <div class="intro-brand-lockup">
+          <img src="/assets/verigate-logo.png" alt="">
+          <span class="brand-wordmark" aria-label="VeriGate"><span>Veri</span><b>Gate</b></span>
+        </div>
+        <div class="intro-center">
+          <p class="intro-kicker">ETHGlobal Open Agents 2026</p>
+          <h1>VeriGate</h1>
+          <p class="intro-copy">Private RSVP infrastructure for verifiable agent events.</p>
+          <span class="intro-date">Apr 24 - May 6, 2026</span>
+        </div>
+      </article>
+
+      <article class="intro-slide" data-intro-slide="1">
+        <p class="intro-slide-title">Who Am I</p>
+        <div class="intro-panel intro-profile">
+          <h2>Skottbié</h2>
+          <p class="intro-copy">Solo Builder</p>
+          <a href="https://x.com/eazimonizone" target="_blank" rel="noreferrer">x.com/eazimonizone</a>
+          <div class="intro-credentials">
+            <span>VeriTask &mdash; OKX OnChainOS AI Hackathon Champion &middot; Mar 2026</span>
+            <span>VeriTax &mdash; Binance AI OpenClaw Hackathon Champion &middot; Mar 2026</span>
           </div>
-          <textarea id="organizerIntent" spellcheck="false">Create a private ETH holder gate for AI agent builders. Users should prove qualified ETH exposure but reveal no wallet addresses or exact balances. One applicant can only RSVP once, and qualified applicants should receive an RSVP pass.</textarea>
-          <div class="controls">
-            <label>
-              Policy compiler
-              <select id="policyMode">
-                <option value="0g-compute-live">0G Compute live</option>
-                <option value="dry-run">Dry run</option>
-              </select>
+        </div>
+      </article>
+
+      <article class="intro-slide" data-intro-slide="2">
+        <p class="intro-slide-title">The Problem</p>
+        <div class="intro-panel">
+          <h2>Proof of access shouldn&rsquo;t require proof of everything.</h2>
+          <p class="intro-copy">Organizers need real eligibility checks, but direct wallet lookups expose balances and screenshots cannot be trusted. Events need a neutral layer between private proof and public receipt.</p>
+          <div class="intro-pill-row">
+            <span>Wallet privacy is fragile</span>
+            <span>Screenshots are unverifiable</span>
+            <span>Receipts are hard to audit</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="intro-slide" data-intro-slide="3">
+        <p class="intro-slide-title">What I Built</p>
+        <div class="intro-panel">
+          <h2>Private gates for <br/> high-signal events.</h2>
+          <p class="intro-copy">VeriGate lets organizers create private RSVP gates, attendees prove eligibility with zkTLS, and reviewers inspect the receipt trail through third-party records.</p>
+          <p class="intro-thesis">AI compiles the policy. zkTLS proves eligibility. The verifier decides.</p>
+          <div class="intro-pill-row">
+            <span>zkTLS eligibility proofs</span>
+            <span>0G audit memory</span>
+            <span>KeeperHub pass execution</span>
+            <span>ENS event identity</span>
+            <span>GateAgent iNFT on 0G</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="intro-slide" data-intro-slide="4">
+        <p class="intro-slide-title">How It Works</p>
+        <div class="intro-panel intro-flow">
+          <h2>From private proof to inspectable receipt.</h2>
+          <ol>
+            <li><span>01</span>Organizer creates a private gate with 0G Compute.</li>
+            <li><span>02</span>Attendee proves ETH-holder eligibility with zkTLS.</li>
+            <li><span>03</span>A deterministic verifier &mdash; not AI &mdash; approves the redacted proof.</li>
+            <li><span>04</span>0G Storage anchors the audit trail and proof metadata.</li>
+            <li><span>05</span>KeeperHub mints the RSVP pass to a fresh recipient.</li>
+            <li><span>06</span>ENS and GateAgent make the event inspectable and portable.</li>
+          </ol>
+        </div>
+      </article>
+
+      <div class="intro-footer">
+        <div id="introDots" class="intro-dots" aria-label="Intro progress"></div>
+        <button id="introNext" class="intro-next" type="button">Continue</button>
+        <button id="introSkip" class="intro-skip" type="button">Skip</button>
+      </div>
+    </section>
+
+    <main class="app" aria-live="polite">
+      <header class="app-header">
+        <a class="brand" href="#" aria-label="VeriGate home">
+          <img src="/assets/verigate-logo.png" alt="">
+          <span class="brand-wordmark" aria-label="VeriGate"><span>Veri</span><b>Gate</b></span>
+        </a>
+        <nav class="role-switch" aria-label="Role">
+          <button class="role-tab active" data-role="organizer">Organizer</button>
+          <button class="role-tab" data-role="attendee">Attendee</button>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <p class="eyebrow">Private RSVP infrastructure</p>
+        <h1 id="heroTitle">Create a private event gate.</h1>
+        <p id="heroCopy">Set who can join, let guests prove privately, and keep every receipt inspectable without exposing source wallets.</p>
+      </section>
+
+      <section class="progress-shell" aria-label="Current flow progress">
+        <div class="progress-copy">
+          <span id="stepKicker">Organizer · Step 1 of 4</span>
+          <strong id="stepTitle">Create event</strong>
+        </div>
+        <div class="progress-track"><span id="progressFill"></span></div>
+      </section>
+      <div id="flowStatus" class="flow-status" hidden></div>
+
+      <section class="role-flow active" data-role-view="organizer">
+        <section class="flow-step active" data-role="organizer" data-step="0">
+          <div class="step-card event-editor">
+            <div class="step-intro">
+              <p class="eyebrow">Organizer</p>
+              <h2>Create a private gate</h2>
+              <p>Name the event and describe the eligibility rule. 0G Compute will compile this into a structured policy.</p>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Event name
+                <input id="eventNameInput" value="AI Agent Builder Gathering" placeholder="e.g. Private builder night" spellcheck="false">
+              </label>
+              <label>
+                Audience
+                <input id="audienceInput" value="AI agent builders" placeholder="e.g. AI builders, researchers, protocol teams" spellcheck="false">
+              </label>
+              <label>
+                Requirement
+                <input id="requirementInput" value="Qualified ETH holder" placeholder="e.g. Qualified ETH holder" spellcheck="false">
+              </label>
+            </div>
+
+            <label class="full-label">
+              Gate intent
+              <textarea id="organizerIntent" spellcheck="false" placeholder="Describe who should be allowed in and what should stay private.">Create a private ETH holder gate for AI agent builders. Users should prove qualified ETH exposure but reveal no wallet addresses or exact balances. One applicant can only RSVP once, and qualified applicants should receive an RSVP pass.</textarea>
             </label>
-            <button id="compilePolicy">Compile Policy</button>
+
+            <div class="actions">
+              <label>
+                Policy compiler
+                <select id="policyMode">
+                  <option value="0g-compute-live">0G Compute live</option>
+                  <option value="dry-run">Dry run</option>
+                </select>
+              </label>
+              <button id="compilePolicy">Create Private Gate</button>
+            </div>
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <span class="step-index">2</span>
-            <div>
-              <h2>Applicant Proof</h2>
-              <p>Use the connected wallet as a source wallet, sign a control message, then create a zkTLS proof.</p>
+        <section class="flow-step" data-role="organizer" data-step="1">
+          <div class="step-card">
+            <div class="step-intro">
+              <p class="eyebrow">Review</p>
+              <h2>Review the access policy</h2>
+              <p>The event gate is generated by 0G Compute and normalized by the verifier schema before guests apply.</p>
             </div>
-          </div>
-          <div class="wallet-row">
-            <button id="connectWallet" class="secondary">Connect Wallet</button>
-            <button id="signMessage" class="secondary">Sign Control Message</button>
-            <span id="walletState" class="muted">No wallet connected</span>
-          </div>
-          <div class="controls">
-            <label>
-              Proof source
-              <select id="proofMode">
-                <option value="fixture-qualified">Fixture qualified</option>
-                <option value="fixture-rejected">Fixture rejected</option>
-                <option value="reclaim-live">Reclaim live</option>
-              </select>
-            </label>
-            <button id="generateProof">Generate Proof</button>
+            <div id="policySummary" class="summary-grid">
+              <div><span>Gate</span><strong>Waiting for policy</strong></div>
+              <div><span>Requirement</span><strong>Not compiled</strong></div>
+              <div><span>Privacy</span><strong>Not compiled</strong></div>
+            </div>
+            <div class="actions right">
+              <button class="secondary step-back" data-role="organizer">Back</button>
+              <button class="step-next" data-role="organizer">Open Applications</button>
+            </div>
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <span class="step-index">3</span>
-            <div>
-              <h2>Verifier + Memory</h2>
-              <p>Run deterministic verification and prepare execution/audit memory.</p>
+        <section class="flow-step" data-role="organizer" data-step="2">
+          <div class="step-card">
+            <div class="step-intro">
+              <p class="eyebrow">Applications</p>
+              <h2>Review attendee applications</h2>
+              <p>Organizer records are pseudonymous: proof hashes, nullifiers, pass status, and receipt pointers. No source wallet or exact balance is shown.</p>
             </div>
-          </div>
-          <div class="controls">
-            <label>
-              Audit memory
-              <select id="memoryMode">
-                <option value="dry-run">Local dry run</option>
-                <option value="0g-storage-live">0G Storage live</option>
-              </select>
-            </label>
-            <button id="verifyFlow">Verify + Write Memory</button>
+            <div id="applicationEmpty" class="empty-state">No attendee applications yet.</div>
+            <div id="applicationsList" class="applications-list"></div>
+            <div class="actions right">
+              <button class="secondary step-back" data-role="organizer">Back</button>
+              <button class="secondary" id="openGateAgentStep">Go to GateAgent</button>
+              <button id="publishEns">Publish Event Receipt</button>
+            </div>
+            <div class="sub-actions">
+              <label>
+                Agent ENS
+                <input id="agentEnsName" value="verigate-agent.eth" spellcheck="false">
+              </label>
+              <button id="resolveEns" class="secondary">Resolve ENS</button>
+            </div>
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <span class="step-index">4</span>
-            <div>
-              <h2>Pass Issuance</h2>
-              <p>Generate a fresh recipient wallet locally, then execute RSVP pass minting without using the source wallet as recipient.</p>
+        <section class="flow-step" data-role="organizer" data-step="3">
+          <div class="step-card">
+            <div class="step-intro">
+              <p class="eyebrow">GateAgent</p>
+              <h2>Activate the event GateAgent</h2>
+              <p>Mint the ERC-7857 GateAgent iNFT on 0G with encrypted event intelligence and verifier-checked data updates.</p>
             </div>
-          </div>
-          <div class="wallet-row">
-            <button id="generatePassWallet" class="secondary">Generate Pass Wallet</button>
-            <span id="passWalletState" class="muted">No pass wallet generated</span>
-          </div>
-          <div class="controls">
-            <label>
-              Execution mode
-              <select id="executionMode">
-                <option value="direct-live">Direct live fallback</option>
-                <option value="keeperhub-live">KeeperHub live</option>
-                <option value="dry-run">Dry run</option>
-              </select>
-            </label>
-            <button id="executePass">Execute Pass Mint</button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-heading">
-            <span class="step-index">5</span>
-            <div>
-              <h2>ENS Identity</h2>
-              <p>Publish and resolve the VeriGate agent name and event subname discovery records.</p>
-            </div>
-          </div>
-          <div class="controls">
-            <label>
-              Agent ENS
-              <input id="agentEnsName" value="verigate-agent.eth" spellcheck="false">
-            </label>
-            <button id="publishEns">Publish ENS Records</button>
-            <button id="resolveEns" class="secondary">Resolve ENS</button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-heading">
-            <span class="step-index">6</span>
-            <div>
-              <h2>GateAgent iNFT</h2>
-              <p>Mint the event-specific ERC-7857 GateAgent on 0G, then test verifier-checked clone or transfer operations.</p>
-            </div>
-          </div>
-          <div class="controls">
-            <button id="mintGateAgent">Mint GateAgent iNFT</button>
-            <button id="cloneGateAgent" class="secondary">iClone</button>
-            <button id="transferGateAgent" class="secondary">iTransfer</button>
-          </div>
-        </section>
-
-        <section class="panel result-panel">
-          <div class="result-grid">
-            <div>
-              <span class="metric-label">Policy</span>
-              <strong id="policyMetric">Pending</strong>
-            </div>
-            <div>
-              <span class="metric-label">Proof</span>
-              <strong id="proofMetric">Pending</strong>
-            </div>
-            <div>
-              <span class="metric-label">Verifier</span>
-              <strong id="verifierMetric">Pending</strong>
-            </div>
-            <div>
-              <span class="metric-label">Execution</span>
-              <strong id="executionMetric">Pending</strong>
-            </div>
-            <div>
-              <span class="metric-label">ENS</span>
-              <strong id="ensMetric">Pending</strong>
-            </div>
-            <div>
-              <span class="metric-label">Pass</span>
-              <strong id="passMetric">Pending</strong>
-            </div>
-            <div>
-              <span class="metric-label">GateAgent</span>
+            <div class="agent-preview">
+              <span>GateAgent iNFT</span>
               <strong id="gateAgentMetric">Pending</strong>
+              <p>Encrypted metadata lives on 0G Storage. iClone and iTransfer require verifier-checked receipts.</p>
+            </div>
+            <div class="actions right">
+              <button class="secondary step-back" data-role="organizer">Back</button>
+              <button id="mintGateAgent">Activate GateAgent</button>
+            </div>
+            <div class="sub-actions">
+              <button id="cloneGateAgent" class="secondary">iClone</button>
+              <button id="transferGateAgent" class="secondary">iTransfer</button>
             </div>
           </div>
         </section>
       </section>
 
-      <aside class="debug">
-        <div class="debug-header">
-          <h2>Debug Logs</h2>
-          <button id="clearLogs" class="ghost">Clear</button>
-        </div>
-        <ol id="logList" class="log-list"></ol>
+      <section class="role-flow" data-role-view="attendee">
+        <section class="flow-step active" data-role="attendee" data-step="0">
+          <div class="invite-card">
+            <div class="invite-top">
+              <span>Private RSVP</span>
+              <span id="inviteRequirement">Gate not created</span>
+            </div>
+            <h2 id="inviteTitle">No active gate yet</h2>
+            <p id="inviteCopy">Ask the organizer to create a gate first. Once live, you can prove eligibility without publishing your wallet or balance.</p>
+            <div class="privacy-pills">
+              <span>Source wallet hidden</span>
+              <span>Exact balance hidden</span>
+              <span>One pass per guest</span>
+              <span>Fresh recipient</span>
+            </div>
+            <div class="actions right">
+              <button class="step-next" data-role="attendee">Start Private RSVP</button>
+            </div>
+          </div>
+        </section>
 
-        <div class="tabs">
-          <button class="tab active" data-panel="policyJson">Policy</button>
-          <button class="tab" data-panel="proofJson">Proof</button>
-          <button class="tab" data-panel="resultJson">Result</button>
-          <button class="tab" data-panel="ensJson">ENS</button>
-          <button class="tab" data-panel="gateAgentJson">GateAgent</button>
-        </div>
-        <pre id="policyJson" class="json-panel active">{}</pre>
-        <pre id="proofJson" class="json-panel">{}</pre>
-        <pre id="resultJson" class="json-panel">{}</pre>
-        <pre id="ensJson" class="json-panel">{}</pre>
-        <pre id="gateAgentJson" class="json-panel">{}</pre>
-      </aside>
+        <section class="flow-step" data-role="attendee" data-step="1">
+          <div class="step-card">
+            <div class="step-intro">
+              <p class="eyebrow">Attendee</p>
+              <h2>Private check-in</h2>
+              <p>Connect the source wallet locally and sign a control message. This signature is checked transiently and is not published.</p>
+            </div>
+            <div class="wallet-row">
+              <button id="connectWallet" class="secondary">Connect Wallet</button>
+              <button id="signMessage">Sign Control Message</button>
+              <span id="walletState" class="inline-state">No wallet connected</span>
+            </div>
+            <div class="actions right">
+              <button class="secondary step-back" data-role="attendee">Back</button>
+              <button class="step-next" data-role="attendee">Continue</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="flow-step" data-role="attendee" data-step="2">
+          <div class="step-card">
+            <div class="step-intro">
+              <p class="eyebrow">Private proof</p>
+              <h2>Prove eligibility</h2>
+              <p>Generate a Reclaim zkTLS proof, redact public proof output, and run the deterministic verifier.</p>
+            </div>
+            <div class="actions">
+              <label>
+                Proof source
+                <select id="proofMode">
+                  <option value="reclaim-live">Reclaim live</option>
+                  <option value="fixture-qualified">Fixture qualified</option>
+                  <option value="fixture-rejected">Fixture rejected</option>
+                </select>
+              </label>
+              <button id="generateProof">Generate Proof</button>
+            </div>
+            <div class="privacy-note">
+              Public output is limited to proof hash, applicant commitment, event nullifier, and qualified/not-qualified tier. Source wallet, wallet signature, exact balance, request body, and raw Reclaim proof stay withheld.
+            </div>
+            <div class="actions">
+              <label>
+                Audit memory
+                <select id="memoryMode">
+                  <option value="0g-storage-live">0G Storage live</option>
+                  <option value="dry-run">Local dry run</option>
+                </select>
+              </label>
+              <button id="verifyFlow">Verify Eligibility</button>
+            </div>
+            <div id="proofSummary" class="status-note">Proof status will appear here.</div>
+            <div id="attestationPanel" class="assurance-panel">
+              <div><span>zkTLS proof</span><strong id="attestationProofMetric">Pending</strong></div>
+              <div><span>Attestor</span><strong id="attestationProviderMetric">Reclaim</strong></div>
+              <div><span>Server verification</span><strong id="attestationServerMetric">Pending</strong></div>
+              <div><span>Public receipt</span><strong>Redacted only</strong></div>
+            </div>
+            <div class="actions right">
+              <button class="secondary step-back" data-role="attendee">Back</button>
+              <button class="step-next" data-role="attendee">Continue to Pass</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="flow-step" data-role="attendee" data-step="3">
+          <div class="step-card result-step">
+            <div class="step-intro">
+              <p class="eyebrow">RSVP pass</p>
+              <h2 id="resultTitle">Claim your private pass</h2>
+              <p id="passSummary">Approved attendees can mint a pass to a fresh recipient wallet.</p>
+            </div>
+            <div class="wallet-row">
+              <button id="generatePassWallet" class="secondary">Generate Pass Wallet</button>
+              <span id="passWalletState" class="inline-state">No pass wallet generated</span>
+            </div>
+            <div class="actions">
+              <label>
+                Execution mode
+                <select id="executionMode">
+                  <option value="keeperhub-live">KeeperHub live</option>
+                  <option value="direct-live">Direct live fallback</option>
+                  <option value="dry-run">Dry run</option>
+                </select>
+              </label>
+              <button id="executePass">Claim RSVP Pass</button>
+            </div>
+            <div class="result-grid">
+              <div><span>Proof</span><strong id="proofMetric">Pending</strong></div>
+              <div><span>Verifier</span><strong id="verifierMetric">Pending</strong></div>
+              <div><span>Pass</span><strong id="passMetric">Pending</strong></div>
+              <div><span>Execution</span><strong id="executionMetric">Pending</strong></div>
+              <div><span>Policy</span><strong id="policyMetric">Pending</strong></div>
+              <div><span>ENS</span><strong id="ensMetric">Pending</strong></div>
+            </div>
+            <div id="bindingPanel" class="assurance-panel">
+              <div><span>Receipt Binding</span><strong id="bindingStatusMetric">Pending</strong></div>
+              <div><span>0G audit</span><strong id="bindingAuditMetric">Pending</strong></div>
+              <div><span>Execution receipt</span><strong id="bindingExecutionMetric">Pending</strong></div>
+              <div><span>Fields matched</span><strong id="bindingFieldsMetric">Pending</strong></div>
+            </div>
+            <div class="actions right">
+              <button class="secondary step-back" data-role="attendee">Back</button>
+            </div>
+          </div>
+        </section>
+      </section>
     </main>
+
+    <button id="evidenceFloat" class="evidence-float" type="button">
+      <span class="live-dot"></span>
+      Onchain Records
+    </button>
+
+    <div id="evidenceBackdrop" class="evidence-backdrop"></div>
+    <aside id="evidenceDrawer" class="evidence-drawer" aria-label="Onchain record drawer">
+      <div class="evidence-header">
+        <div>
+          <p class="eyebrow">Onchain Records</p>
+          <h2>Onchain Records</h2>
+          <span id="envStatus" class="env-status">Checking live services...</span>
+        </div>
+        <button id="evidenceClose" class="ghost">Close</button>
+      </div>
+
+      <div class="rail-status">
+        <div><span>0G Compute</span><strong id="railCompute">Pending</strong></div>
+        <div><span>Reclaim</span><strong id="railProof">Pending</strong></div>
+        <div><span>0G Storage</span><strong id="railStorage">Pending</strong></div>
+        <div><span>KeeperHub</span><strong id="railKeeper">Pending</strong></div>
+      </div>
+
+      <div class="trace-header">
+        <h3>Execution Trace</h3>
+        <button id="clearLogs" class="ghost">Clear</button>
+      </div>
+      <ol id="logList" class="log-list"></ol>
+
+      <div class="tabs" aria-label="Onchain record tabs">
+        <button class="tab active" data-panel="policyJson">Policy</button>
+        <button class="tab" data-panel="proofJson">Proof</button>
+        <button class="tab" data-panel="resultJson">Result</button>
+        <button class="tab" data-panel="ensJson">ENS</button>
+        <button class="tab" data-panel="gateAgentJson">GateAgent</button>
+      </div>
+      <div id="policyLinks" class="record-links active"></div>
+      <div id="proofLinks" class="record-links"></div>
+      <div id="resultLinks" class="record-links"></div>
+      <div id="ensLinks" class="record-links"></div>
+      <div id="gateAgentLinks" class="record-links"></div>
+      <pre id="policyJson" class="json-panel active">{}</pre>
+      <pre id="proofJson" class="json-panel">{}</pre>
+      <pre id="resultJson" class="json-panel">{}</pre>
+      <pre id="ensJson" class="json-panel">{}</pre>
+      <pre id="gateAgentJson" class="json-panel">{}</pre>
+    </aside>
 
     <script src="/vendor/ethers.umd.min.js"></script>
     <script src="/app.js"></script>
+    <script src="/liquidglass.js"></script>
   </body>
 </html>

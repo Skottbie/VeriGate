@@ -3,9 +3,11 @@ import { ethers } from "ethers";
 
 import { canonicalize } from "./canonical.js";
 import { sha256Hex } from "./hash.js";
+import { create0GJsonRpcProvider } from "./rpc.js";
 
 export const DEFAULT_OG_STORAGE_INDEXER_RPC = "https://indexer-storage-testnet-turbo.0g.ai";
-export const DEFAULT_OG_STORAGE_UPLOAD_TIMEOUT_MS = 90_000;
+export const DEFAULT_OG_STORAGE_UPLOAD_TIMEOUT_MS = 300_000;
+export const DEFAULT_OG_STORAGE_UPLOAD_RETRIES = 2;
 
 const FORBIDDEN_PUBLIC_KEY_PATTERNS = [
   /^source.*wallet$/i,
@@ -87,6 +89,33 @@ async function withUploadTimeout(operation, timeoutMs) {
   }
 }
 
+async function retryUpload(operationFactory, { retries, retryIntervalMs = 5000 } = {}) {
+  const attempts = Math.max(1, Number(retries) || 1);
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await operationFactory();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isRetryableStorageError(error)) {
+        throw error;
+      }
+      await delay(retryIntervalMs);
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableStorageError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return error instanceof OgStorageUploadTimeoutError
+    || /timed out|Waiting for storage node to sync|fetch failed|socket|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i.test(message);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
 export function create0GStorageAdapter({
   rpcUrl = process.env.OG_RPC_URL,
   indexerRpc = process.env.OG_STORAGE_INDEXER_RPC ?? DEFAULT_OG_STORAGE_INDEXER_RPC,
@@ -94,6 +123,14 @@ export function create0GStorageAdapter({
   uploadTimeoutMs = parsePositiveInteger(
     process.env.OG_STORAGE_UPLOAD_TIMEOUT_MS,
     DEFAULT_OG_STORAGE_UPLOAD_TIMEOUT_MS,
+  ),
+  uploadRetries = parsePositiveInteger(
+    process.env.OG_STORAGE_UPLOAD_RETRIES,
+    DEFAULT_OG_STORAGE_UPLOAD_RETRIES,
+  ),
+  uploadRetryIntervalMs = parsePositiveInteger(
+    process.env.OG_STORAGE_UPLOAD_RETRY_INTERVAL_MS,
+    5000,
   ),
   uploadOptions = {},
 } = {}) {
@@ -107,7 +144,7 @@ export function create0GStorageAdapter({
     throw new Error("OG_PRIVATE_KEY is required for 0G Storage uploads");
   }
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const provider = create0GJsonRpcProvider(rpcUrl);
   const signer = new ethers.Wallet(privateKey, provider);
   const indexer = new Indexer(indexerRpc);
   const defaultUploadOptions = {
@@ -135,13 +172,16 @@ export function create0GStorageAdapter({
     }
 
     const localRootHash = tree?.rootHash();
-    const [tx, uploadErr] = await withUploadTimeout(
-      indexer.upload(data, rpcUrl, signer, {
-        ...defaultUploadOptions,
-        ...uploadOptions,
-        ...callUploadOptions,
-      }),
-      uploadTimeoutMs,
+    const [tx, uploadErr] = await retryUpload(
+      () => withUploadTimeout(
+        indexer.upload(data, rpcUrl, signer, {
+          ...defaultUploadOptions,
+          ...uploadOptions,
+          ...callUploadOptions,
+        }),
+        uploadTimeoutMs,
+      ),
+      { retries: uploadRetries, retryIntervalMs: uploadRetryIntervalMs },
     );
     if (uploadErr !== null) {
       throw new Error(`0G upload error: ${uploadErr.message}`);

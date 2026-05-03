@@ -6,10 +6,12 @@ import { hashPolicy, verifyProof } from "../src/index.js";
 import {
   assertPublicProofSafe,
   buildApplicantProofFromReclaim,
+  buildPublicReclaimProofMeta,
   buildWalletControlMessage,
   createReclaimEthBalanceRequest,
   extractBalanceHex,
   requestReclaimEthHolderProof,
+  verifyReclaimProofBinding,
   verifyWalletControlSignature,
 } from "../src/reclaimProof.js";
 
@@ -149,6 +151,146 @@ test("extractBalanceHex accepts named Reclaim captures", () => {
   }), "0xde0b6b3a7640000");
 });
 
+test("server-side Reclaim verification accepts a live-shaped proof and derives the tier from raw proof data", async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const policy = makePolicy();
+  const proof = fakeReclaimProof("0x1");
+  const calls = [];
+  const result = buildApplicantProofFromReclaim({
+    policy,
+    walletAddress: wallet.address,
+    applicantSecret: "test-secret-4",
+    expiresAt: "2026-05-06T23:59:59.000Z",
+    qualified: true,
+    reclaimProof: proof,
+  });
+
+  const verification = await verifyReclaimProofBinding({
+    applicantProof: result.applicantProof,
+    publicProofMeta: result.publicProofMeta,
+    rawReclaimProof: proof,
+    moduleLoader: async () => ({
+      getHttpProviderClaimParamsFromProof: (candidate) => JSON.parse(candidate.claimData.parameters),
+      hashProofClaimParams: () => "0xexpectedhash",
+      verifyProof: async (candidate, config) => {
+        calls.push({ candidate, config });
+        return { isVerified: candidate === proof };
+      },
+    }),
+  });
+
+  assert.equal(verification.provider, "Reclaim");
+  assert.equal(verification.serverVerified, true);
+  assert.equal(verification.claimSource, "server_verified_zktls");
+  assert.equal(verification.derivedExposureTier, "qualified");
+  assert.equal(verification.verificationConfig, "hash_bound");
+  assert.equal(verification.witnessCount, 1);
+  assert.equal(verification.signatureCount, 1);
+  assert.equal(verification.rawProof, "withheld");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].config, { hashes: ["0xexpectedhash"] });
+});
+
+test("server-side Reclaim verification rejects when the raw proof session is missing", async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const policy = makePolicy();
+  const proof = fakeReclaimProof("0x1");
+  const result = buildApplicantProofFromReclaim({
+    policy,
+    walletAddress: wallet.address,
+    applicantSecret: "test-secret-5",
+    expiresAt: "2026-05-06T23:59:59.000Z",
+    qualified: true,
+    reclaimProof: proof,
+  });
+
+  await assert.rejects(() => verifyReclaimProofBinding({
+    applicantProof: result.applicantProof,
+    publicProofMeta: result.publicProofMeta,
+    rawReclaimProof: null,
+    moduleLoader: async () => ({
+      verifyProof: async () => ({ isVerified: true }),
+    }),
+  }), /RECLAIM_PROOF_NOT_FOUND/);
+});
+
+test("server-side Reclaim verification rejects when witness proof verification fails", async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const policy = makePolicy();
+  const proof = fakeReclaimProof("0x1");
+  const result = buildApplicantProofFromReclaim({
+    policy,
+    walletAddress: wallet.address,
+    applicantSecret: "test-secret-6",
+    expiresAt: "2026-05-06T23:59:59.000Z",
+    qualified: true,
+    reclaimProof: proof,
+  });
+
+  await assert.rejects(() => verifyReclaimProofBinding({
+    applicantProof: result.applicantProof,
+    publicProofMeta: result.publicProofMeta,
+    rawReclaimProof: proof,
+    moduleLoader: async () => ({
+      getHttpProviderClaimParamsFromProof: (candidate) => JSON.parse(candidate.claimData.parameters),
+      hashProofClaimParams: () => "0xexpectedhash",
+      verifyProof: async () => ({ isVerified: false }),
+    }),
+  }), /INVALID_RECLAIM_PROOF/);
+});
+
+test("server-side Reclaim verification rejects tier mismatch between applicant proof and raw proof balance", async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const policy = makePolicy();
+  const proof = fakeReclaimProof("0x0");
+  const result = buildApplicantProofFromReclaim({
+    policy,
+    walletAddress: wallet.address,
+    applicantSecret: "test-secret-7",
+    expiresAt: "2026-05-06T23:59:59.000Z",
+    qualified: true,
+    reclaimProof: proof,
+  });
+
+  await assert.rejects(() => verifyReclaimProofBinding({
+    applicantProof: result.applicantProof,
+    publicProofMeta: result.publicProofMeta,
+    rawReclaimProof: proof,
+    moduleLoader: async () => ({
+      getHttpProviderClaimParamsFromProof: (candidate) => JSON.parse(candidate.claimData.parameters),
+      hashProofClaimParams: () => "0xexpectedhash",
+      verifyProof: async () => ({ isVerified: true }),
+    }),
+  }), /RECLAIM_TIER_MISMATCH/);
+});
+
+test("server-side Reclaim verification rejects when public proof metadata does not bind to the raw proof", async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const policy = makePolicy();
+  const proof = fakeReclaimProof("0x1");
+  const result = buildApplicantProofFromReclaim({
+    policy,
+    walletAddress: wallet.address,
+    applicantSecret: "test-secret-8",
+    expiresAt: "2026-05-06T23:59:59.000Z",
+    qualified: true,
+    reclaimProof: proof,
+  });
+  const tamperedMeta = {
+    ...buildPublicReclaimProofMeta({ ...proof, identifier: "tampered" }),
+    proofSha256: "0x" + "ab".repeat(32),
+  };
+
+  await assert.rejects(() => verifyReclaimProofBinding({
+    applicantProof: result.applicantProof,
+    publicProofMeta: tamperedMeta,
+    rawReclaimProof: proof,
+    moduleLoader: async () => ({
+      verifyProof: async () => ({ isVerified: true }),
+    }),
+  }), /INVALID_RECLAIM_PROOF/);
+});
+
 function fakeReclaimClient(balanceHex) {
   return {
     async zkFetch() {
@@ -162,6 +304,27 @@ function fakeReclaimProof(balanceHex) {
     identifier: "reclaim-proof-fixture",
     claimData: {
       provider: "reclaim",
+      parameters: JSON.stringify({
+        url: "https://rpc.example",
+        method: "POST",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_getBalance",
+          params: ["{{wallet}}", "latest"],
+        }),
+        responseMatches: [
+          {
+            type: "regex",
+            value: '"result"\\s*:\\s*"(?<balanceHex>0x[0-9a-fA-F]+)"',
+          },
+        ],
+        responseRedactions: [
+          {
+            regex: '"result"\\s*:\\s*"0x[0-9a-fA-F]+"',
+          },
+        ],
+      }),
     },
     signatures: ["0xsignature"],
     witnesses: [{ id: "witness-1" }],

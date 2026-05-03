@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 
 import { canonicalize } from "./canonical.js";
 import { hashComputeReceipt, hashPolicy, sha256Hex } from "./hash.js";
+import { create0GJsonRpcProvider } from "./rpc.js";
 import { validateComputeReceipt, validateEligibilityPolicy } from "./schemas.js";
 
 const DEFAULT_POLICY_COMPILER_MODEL_HINT = "qwen-2.5-7b-instruct";
@@ -149,7 +150,7 @@ export function create0GComputeAdapter({
   }
 
   async function createBroker() {
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const provider = create0GJsonRpcProvider(rpcUrl);
     const signer = new ethers.Wallet(privateKey, provider);
     return brokerFactory(signer);
   }

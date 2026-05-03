@@ -1,5 +1,7 @@
 import { ethers } from "ethers";
 
+import { createSepoliaJsonRpcProvider } from "./rpc.js";
+
 export const DEFAULT_AGENT_ENS_NAME = "verigate-agent.eth";
 export const DEFAULT_ENS_NETWORK = "sepolia";
 export const DEFAULT_SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
@@ -138,7 +140,7 @@ export function validateEnsRecordAlignment({ payload, resolvedTextRecords } = {}
 }
 
 export function createEnsResolverAdapter({
-  provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL ?? DEFAULT_SEPOLIA_RPC_URL),
+  provider = createSepoliaJsonRpcProvider(process.env.SEPOLIA_RPC_URL ?? DEFAULT_SEPOLIA_RPC_URL),
 } = {}) {
   return {
     async resolveIdentity({ name, textKeys = ENS_TEXT_KEYS } = {}) {
@@ -192,7 +194,7 @@ export async function publishEnsTextRecords({
     throw new Error("SEPOLIA_PRIVATE_KEY or OG_PRIVATE_KEY is required to publish ENS records");
   }
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const provider = createSepoliaJsonRpcProvider(rpcUrl);
   const wallet = new ethers.Wallet(privateKey, provider);
   const resolverAddress = await ensureWritableResolver({ name, provider, wallet });
   const contract = new ethers.Contract(

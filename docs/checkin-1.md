@@ -2,7 +2,7 @@
 
 ## Project name
 
-VeriAgent Mesh
+VeriGate
 
 ## Category
 
@@ -14,7 +14,7 @@ Infrastructure
 
 ## Short description
 
-An open agent mesh for verifiable task execution, memory, and onchain receipts.
+Private RSVP gates with zkTLS eligibility proofs, 0G audit memory, and onchain receipts.
 
 ## Plan
 
@@ -34,7 +34,7 @@ No major blocker. The current work is narrowing the MVP scope before the first i
 
 ## Confidence
 
-Confident. The project scope is being reduced to a focused MVP with verifiable agent execution, proof receipts, and sponsor-native integrations.
+Confident. The project scope is focused on private event access, verifiable proof receipts, and sponsor-native integrations.
 
 ## Idea decided
 
@@ -42,16 +42,16 @@ Yes.
 
 ## What I am thinking of building
 
-VeriAgent Mesh is infrastructure for verifiable open-agent execution. A user can publish a task, multiple agents can coordinate to complete it, and the system produces a public execution receipt containing task inputs, agent outputs, evidence references, storage pointers, and onchain settlement or audit metadata. The MVP will focus on a small agent task flow with sponsor integrations for decentralized storage, agent coordination, and reliable execution.
+VeriGate is private RSVP infrastructure for verifiable agent events. An organizer can create a private gate, attendees can prove eligibility without exposing source wallets or exact balances, and the system produces inspectable receipts with proof metadata, storage pointers, ENS identity records, and onchain pass execution.
 
 ## Prizes
 
-Primary targets are 0G, Gensyn AXL, and KeeperHub.
+Primary targets are 0G, ENS, and KeeperHub.
 
 ## Technologies to learn more about
 
 - 0G
-- Gensyn AXL
+- ENS
 - KeeperHub
 
 ## Other technologies of interest

@@ -2,7 +2,7 @@
 
 Generated at: 2026-04-29T14:36:30.443Z  
 Last updated at: 2026-04-29T23:09:02.825+08:00  
-Project: VeriAgent Mesh / VeriGate
+Project: VeriGate
 
 ## Summary
 
@@ -147,7 +147,7 @@ Also add a small canonical `curl` example for `contract-call` that includes:
 
 ## Current Project Workaround
 
-VeriAgent Mesh currently sends both headers for KeeperHub Direct Execution:
+VeriGate currently sends both headers for KeeperHub Direct Execution:
 
 ```http
 Authorization: Bearer <KH_API_KEY>

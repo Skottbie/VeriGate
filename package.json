@@ -1,5 +1,5 @@
 {
-  "name": "veriagent-mesh",
+  "name": "verigate",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -40,6 +40,7 @@
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.6",
     "@0glabs/0g-serving-broker": "^0.7.5",
+    "@reclaimprotocol/js-sdk": "^5.3.0",
     "@reclaimprotocol/zk-fetch": "^0.8.0"
   },
   "devDependencies": {
