@@ -64,7 +64,7 @@ VeriGate uses ENS as the public identity layer for the agent and each event. The
 
 - ENS text records include policy hash, verifier address, pass contract, audit pointer, app URL, proof hash, and nullifier.
 - The UI publishes records, resolves them back, and checks alignment against the current workflow result.
-- Records can be verified at: https://app.ens.domains/verigate-agent.eth
+- Records can be verified at: [https://app.ens.domains/verigate-agent.eth](https://sepolia.app.ens.domains/verigate-agent.eth)
 
 ### KeeperHub
 
